@@ -2,7 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
+const mysql = require('mysql2/promise');
+const cron = require('node-cron');
 
 const app = express();
 const PORT = process.env.PORT || 5003;
@@ -68,18 +70,193 @@ function saveConfig(config) {
 // Load initial config
 let config = loadConfig();
 
+// Auto-Fog state
+let autoFogState = {
+    active: false,
+    interval: 5, // minutes
+    cronJob: null,
+    startTime: null,
+    autoDisableTime: null,
+    autoDisableTimeout: null
+};
+
+// MySQL connection
+let db = null;
+
+// Initialize MySQL connection
+async function initializeDatabase() {
+    try {
+        db = await mysql.createConnection({
+            host: process.env.DB_HOST || 'localhost',
+            user: process.env.DB_USER || 'fog_user',
+            password: process.env.DB_PASSWORD || 'fog_password',
+            database: process.env.DB_NAME || 'fog_controller'
+        });
+        
+        // Create table if it doesn't exist
+        await db.execute(`
+            CREATE TABLE IF NOT EXISTS fog_activations (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                type ENUM('manual', 'auto') DEFAULT 'manual',
+                duration INT DEFAULT 0,
+                INDEX idx_timestamp (timestamp)
+            )
+        `);
+        
+        console.log('📊 MySQL database connected successfully');
+    } catch (error) {
+        console.error('❌ MySQL connection failed:', error.message);
+        console.log('⚠️  Running without database logging');
+    }
+}
+
+// Log activation to database
+async function logActivation(type = 'manual') {
+    if (!db) return;
+    
+    try {
+        await db.execute(
+            'INSERT INTO fog_activations (type) VALUES (?)',
+            [type]
+        );
+        console.log(`📝 Logged ${type} activation to database`);
+    } catch (error) {
+        console.error('❌ Failed to log activation:', error.message);
+    }
+}
+
+// Get usage analytics
+async function getUsageAnalytics() {
+    if (!db) return { hourlyData: [], peakHour: null };
+    
+    try {
+        // Get hourly usage data for the last 24 hours
+        const [hourlyRows] = await db.execute(`
+            SELECT 
+                HOUR(timestamp) as hour,
+                COUNT(*) as count
+            FROM fog_activations 
+            WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+            GROUP BY HOUR(timestamp)
+            ORDER BY hour
+        `);
+        
+        // Fill missing hours with 0
+        const hourlyData = [];
+        for (let i = 0; i < 24; i++) {
+            const found = hourlyRows.find(row => row.hour === i);
+            hourlyData.push({
+                hour: i,
+                count: found ? found.count : 0
+            });
+        }
+        
+        // Get peak hour
+        const [peakRows] = await db.execute(`
+            SELECT 
+                HOUR(timestamp) as hour,
+                COUNT(*) as count
+            FROM fog_activations 
+            WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+            GROUP BY HOUR(timestamp)
+            ORDER BY count DESC
+            LIMIT 1
+        `);
+        
+        const peakHour = peakRows.length > 0 ? `${peakRows[0].hour}:00` : null;
+        
+        return { hourlyData, peakHour };
+    } catch (error) {
+        console.error('❌ Failed to get analytics:', error.message);
+        return { hourlyData: [], peakHour: null };
+    }
+}
+
+// Auto-Fog functions
+function startAutoFog(interval) {
+    // Check if already starting/active to prevent race condition
+    if (autoFogState.active || autoFogState.cronJob) {
+        console.log('⚠️  Auto-Fog already active or starting');
+        return;
+    }
+    
+    // Set active flag immediately to prevent concurrent starts
+    autoFogState.active = true;
+    
+    try {
+        const cronPattern = `*/${interval} * * * *`; // Every X minutes
+        
+        autoFogState.cronJob = cron.schedule(cronPattern, async () => {
+            console.log(`🤖 Auto-Fog triggered (${interval} min interval)`);
+            try {
+                await executeCommand('on', 'auto');
+            } catch (error) {
+                console.error('❌ Auto-Fog execution failed:', error);
+            }
+        }, {
+            scheduled: false
+        });
+        
+        autoFogState.interval = interval;
+        autoFogState.startTime = Date.now();
+        autoFogState.autoDisableTime = Date.now() + (60 * 60 * 1000); // 1 hour from now
+        autoFogState.cronJob.start();
+        
+        // Auto-disable after 1 hour
+        autoFogState.autoDisableTimeout = setTimeout(() => {
+            console.log('⏰ Auto-Fog automatically disabled after 1 hour');
+            stopAutoFog();
+        }, 60 * 60 * 1000); // 1 hour
+        
+        console.log(`✅ Auto-Fog started: ${interval} min interval, auto-disable in 1 hour`);
+    } catch (error) {
+        console.error('❌ Failed to start Auto-Fog:', error);
+        autoFogState.active = false;
+        throw error;
+    }
+}
+
+function stopAutoFog() {
+    if (autoFogState.cronJob) {
+        autoFogState.cronJob.destroy();
+        autoFogState.cronJob = null;
+    }
+    
+    if (autoFogState.autoDisableTimeout) {
+        clearTimeout(autoFogState.autoDisableTimeout);
+        autoFogState.autoDisableTimeout = null;
+    }
+    
+    autoFogState.active = false;
+    autoFogState.startTime = null;
+    autoFogState.autoDisableTime = null;
+    
+    console.log('🛑 Auto-Fog stopped');
+}
+
+// Initialize database on startup
+initializeDatabase();
+
 // Middleware
 app.use(express.json());
 
 // Execute Python script command
-function executeCommand(command) {
+function executeCommand(command, type = 'manual') {
     return new Promise((resolve, reject) => {
+        // Validate command input
+        const validCommands = ['on', 'off'];
+        if (!validCommands.includes(command)) {
+            reject(new Error('Invalid command. Must be "on" or "off"'));
+            return;
+        }
+        
         const pythonPath = config.pythonScriptPath;
-        const scriptCommand = `sudo python3 ${pythonPath} --command ${command}`;
         
-        console.log(`Executing: ${scriptCommand}`);
+        console.log(`Executing: sudo python3 ${pythonPath} --command ${command}`);
         
-        exec(scriptCommand, (error, stdout, stderr) => {
+        // Use execFile for better security
+        execFile('sudo', ['python3', pythonPath, '--command', command], async (error, stdout, stderr) => {
             if (error) {
                 console.error(`Error: ${error}`);
                 reject(error);
@@ -98,6 +275,9 @@ function executeCommand(command) {
                 config.fogActive = true;
                 config.lastActivated = new Date().toISOString();
                 config.activationCount++;
+                
+                // Log to database
+                await logActivation(type);
             } else if (command === 'off') {
                 config.fogActive = false;
             }
@@ -121,12 +301,14 @@ app.get('/api/health', (req, res) => {
 });
 
 // Get current status
-app.get('/api/status', (req, res) => {
+app.get('/api/status', async (req, res) => {
+    const analytics = await getUsageAnalytics();
     res.json({
         fogActive: config.fogActive,
         lastCommand: config.lastCommand,
         lastActivated: config.lastActivated,
         activationCount: config.activationCount,
+        peakHour: analytics.peakHour,
         timestamp: new Date().toISOString()
     });
 });
@@ -208,10 +390,17 @@ app.post('/api/fog/custom', async (req, res) => {
     }
     
     try {
-        const pythonPath = config.pythonScriptPath;
-        const scriptCommand = `sudo python3 ${pythonPath} --command custom --code ${code}`;
+        // Validate custom code (only allow hex digits)
+        if (!/^[0-9A-Fa-f]+$/.test(code)) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Invalid code format. Only hexadecimal characters allowed' 
+            });
+        }
         
-        exec(scriptCommand, (error, stdout, stderr) => {
+        const pythonPath = config.pythonScriptPath;
+        
+        execFile('sudo', ['python3', pythonPath, '--command', 'custom', '--code', code], (error, stdout, stderr) => {
             if (error) {
                 return res.status(500).json({ 
                     success: false, 
@@ -235,11 +424,112 @@ app.post('/api/fog/custom', async (req, res) => {
     }
 });
 
+// Auto-Fog endpoints
+app.get('/api/auto-fog/status', (req, res) => {
+    res.json({
+        active: autoFogState.active,
+        interval: autoFogState.interval,
+        startTime: autoFogState.startTime,
+        autoDisableTime: autoFogState.autoDisableTime,
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.post('/api/auto-fog/enable', (req, res) => {
+    const { interval } = req.body;
+    
+    if (!interval || ![2, 5, 10].includes(parseInt(interval))) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid interval. Must be 2, 5, or 10 minutes'
+        });
+    }
+    
+    try {
+        startAutoFog(parseInt(interval));
+        res.json({
+            success: true,
+            message: `Auto-Fog enabled with ${interval} minute interval`,
+            interval: parseInt(interval)
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to enable Auto-Fog',
+            details: error.message
+        });
+    }
+});
+
+app.post('/api/auto-fog/disable', (req, res) => {
+    try {
+        stopAutoFog();
+        res.json({
+            success: true,
+            message: 'Auto-Fog disabled'
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to disable Auto-Fog',
+            details: error.message
+        });
+    }
+});
+
+// Analytics endpoints
+app.get('/api/analytics/usage', async (req, res) => {
+    try {
+        const analytics = await getUsageAnalytics();
+        res.json({
+            success: true,
+            ...analytics
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: 'Failed to get analytics',
+            details: error.message
+        });
+    }
+});
+
+// Graceful shutdown handling
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+
+async function gracefulShutdown() {
+    console.log('\n⚠️  Shutting down gracefully...');
+    
+    // Stop auto-fog if running
+    if (autoFogState.active) {
+        stopAutoFog();
+    }
+    
+    // Close database connection
+    if (db) {
+        try {
+            await db.end();
+            console.log('📊 Database connection closed');
+        } catch (error) {
+            console.error('❌ Error closing database:', error.message);
+        }
+    }
+    
+    // Save final config state
+    saveConfig(config);
+    
+    console.log('👋 Shutdown complete');
+    process.exit(0);
+}
+
 // Start server
 app.listen(PORT, () => {
-    console.log(`\n🌫️  Fog Controller Server`);
+    console.log(`\n💨 Fog Controller Server`);
     console.log(`📡 Running on http://localhost:${PORT}`);
     console.log(`📊 Status: ${config.fogActive ? 'FOG ACTIVE' : 'Standby'}`);
     console.log(`📈 Total activations: ${config.activationCount}`);
+    console.log(`🤖 Auto-Fog: ${autoFogState.active ? `Active (${autoFogState.interval} min)` : 'Disabled'}`);
+    console.log(`📊 Database: ${db ? 'Connected' : 'Not connected'}`);
     console.log(`\n✅ Server ready for connections!\n`);
 });

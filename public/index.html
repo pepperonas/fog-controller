@@ -6,7 +6,7 @@
 
     <!-- Primary Meta Tags -->
     <title>Fog Controller - RF433 Nebelmaschinen-Steuerung via Raspberry Pi</title>
-    <meta name="title" content="Fog Controller - RF433 Nebelmaschinen-Steuerung via Raspberry Pi">
+    <meta name="title" content="💨 Fog Controller - RF433 Nebelmaschinen-Steuerung via Raspberry Pi">
     <meta name="description" content="Moderne Web-App zur Kontrolle Ihrer Nebelmaschine über 433MHz RF-Signale. Ein-/Aus-Steuerung mit Status-Tracking via Raspberry Pi.">
     <meta name="keywords" content="Fog, Nebelmaschine, RF433, Raspberry Pi, Web Controller, GPIO Control">
     <meta name="author" content="Fog Control App">
@@ -371,7 +371,7 @@
 </head>
 <body>
     <header class="header">
-        <h1>🌫️ Fog Controller</h1>
+        <h1>💨 Fog Controller</h1>
         <p style="text-align: center; color: var(--text-secondary); margin-top: var(--spacing-2);">
             RF433 Nebelmaschinen-Steuerung via Raspberry Pi
         </p>
@@ -380,14 +380,32 @@
     <div class="container">
         <!-- Main Control -->
         <div class="card">
-            <h2>Nebelmaschine Steuerung</h2>
+            <h2>💨 Nebelmaschine Steuerung</h2>
             <div class="fog-button" id="fog-btn">
-                <svg viewBox="0 0 24 24">
-                    <path d="M6.5 17a5 5 0 0 1 5-5 1 1 0 0 0 1-1 7 7 0 0 1 7-7c3.43 0 6.29 2.47 6.9 5.74a4.5 4.5 0 0 1-.4 8.96A1.2 1.2 0 0 1 25 17.5a.5.5 0 0 0-.5-.5h-18a.5.5 0 0 0-.5.5zm12-13a3 3 0 0 0-3 3v1a3 3 0 0 0-3 3v.17A5.5 5.5 0 0 0 2 16.5a2.5 2.5 0 0 0 2.5 2.5h15a2.5 2.5 0 0 0 2.5-2.5 5.5 5.5 0 0 0-3.5-5.13V11a5 5 0 0 0-5-5z"/>
-                </svg>
+                <span style="font-size: 60px;">💨</span>
             </div>
             <div class="fog-status inactive" id="fog-status">
                 Nebelmaschine ist AUS
+            </div>
+        </div>
+
+        <!-- Auto-Fog Control -->
+        <div class="card">
+            <h2>Auto-Fog</h2>
+            <div style="display: flex; align-items: center; gap: var(--spacing-4); margin-bottom: var(--spacing-4);">
+                <label for="auto-fog-interval" style="font-weight: 500; color: var(--text-primary);">Intervall:</label>
+                <select id="auto-fog-interval" style="padding: var(--spacing-2) var(--spacing-3); border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.2); background: var(--background-darker); color: var(--text-primary); font-size: 1rem;">
+                    <option value="0">Deaktiviert</option>
+                    <option value="2">Alle 2 Minuten</option>
+                    <option value="5">Alle 5 Minuten</option>
+                    <option value="10">Alle 10 Minuten</option>
+                </select>
+                <button class="btn btn-primary" id="auto-fog-toggle" style="min-height: 40px; padding: var(--spacing-2) var(--spacing-4);">
+                    <span>Aktivieren</span>
+                </button>
+            </div>
+            <div class="auto-fog-status" id="auto-fog-status" style="text-align: center; padding: var(--spacing-3); border-radius: var(--radius); background: var(--background-darker); color: var(--text-secondary);">
+                Auto-Fog ist deaktiviert
             </div>
         </div>
 
@@ -404,9 +422,17 @@
                     <div class="stat-label">Letzte Aktivierung</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-value" id="rf-code">-</div>
-                    <div class="stat-label">Aktueller Code</div>
+                    <div class="stat-value" id="peak-hour">-</div>
+                    <div class="stat-label">Peak-Stunde</div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Usage Chart -->
+        <div class="card">
+            <h2>Nutzungsverlauf</h2>
+            <div id="usage-chart" style="height: 300px; background: var(--background-darker); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
+                Chart wird geladen...
             </div>
         </div>
 
@@ -432,8 +458,10 @@
                 this.initializeElements();
                 this.attachEventListeners();
                 this.loadStatus();
+                this.loadAutoFogStatus();
                 // Auto-refresh status every 5 seconds
                 setInterval(() => this.loadStatus(), 5000);
+                setInterval(() => this.loadAutoFogStatus(), 10000);
             }
 
             initializeElements() {
@@ -444,7 +472,11 @@
                     forceOffBtn: document.getElementById('force-off'),
                     activationCount: document.getElementById('activation-count'),
                     lastActivated: document.getElementById('last-activated'),
-                    rfCode: document.getElementById('rf-code'),
+                    peakHour: document.getElementById('peak-hour'),
+                    autoFogInterval: document.getElementById('auto-fog-interval'),
+                    autoFogToggle: document.getElementById('auto-fog-toggle'),
+                    autoFogStatus: document.getElementById('auto-fog-status'),
+                    usageChart: document.getElementById('usage-chart'),
                     message: document.getElementById('message')
                 };
             }
@@ -456,6 +488,9 @@
                 // Force controls
                 this.elements.forceOnBtn.addEventListener('click', () => this.turnOn());
                 this.elements.forceOffBtn.addEventListener('click', () => this.turnOff());
+
+                // Auto-fog controls
+                this.elements.autoFogToggle.addEventListener('click', () => this.toggleAutoFog());
             }
 
             async loadStatus() {
@@ -476,8 +511,11 @@
                         this.elements.lastActivated.textContent = '-';
                     }
                     
-                    // Update RF code display
-                    this.elements.rfCode.textContent = data.fogActive ? '4543756' : '4543792';
+                    // Update peak hour
+                    this.elements.peakHour.textContent = data.peakHour || '-';
+                    
+                    // Load usage chart
+                    this.loadUsageChart();
                     
                 } catch (error) {
                     console.error('Failed to load status:', error);
@@ -557,6 +595,142 @@
                 } catch (error) {
                     this.showMessage('Verbindungsfehler', 'error');
                 }
+            }
+
+            async loadAutoFogStatus() {
+                try {
+                    const response = await fetch('/api/auto-fog/status');
+                    const data = await response.json();
+                    
+                    if (data.active) {
+                        this.elements.autoFogInterval.value = data.interval;
+                        this.elements.autoFogToggle.textContent = 'Deaktivieren';
+                        this.elements.autoFogToggle.className = 'btn btn-danger';
+                        
+                        const remaining = Math.max(0, Math.ceil((data.autoDisableTime - Date.now()) / 1000 / 60));
+                        this.elements.autoFogStatus.innerHTML = `
+                            <span style="color: var(--accent-green);">
+                                ✅ Auto-Fog aktiv (alle ${data.interval} Min)
+                            </span><br>
+                            <span style="font-size: 0.9em;">
+                                Automatisch deaktiviert in ${remaining} Min
+                            </span>
+                        `;
+                        this.elements.autoFogStatus.style.background = 'rgba(156, 182, 143, 0.1)';
+                    } else {
+                        this.elements.autoFogToggle.textContent = 'Aktivieren';
+                        this.elements.autoFogToggle.className = 'btn btn-primary';
+                        this.elements.autoFogStatus.textContent = 'Auto-Fog ist deaktiviert';
+                        this.elements.autoFogStatus.style.background = 'var(--background-darker)';
+                    }
+                } catch (error) {
+                    console.error('Failed to load auto-fog status:', error);
+                }
+            }
+
+            async toggleAutoFog() {
+                try {
+                    const interval = parseInt(this.elements.autoFogInterval.value);
+                    
+                    // Validate interval value
+                    if (isNaN(interval) || ![0, 2, 5, 10].includes(interval)) {
+                        this.showMessage('Ungültiges Intervall', 'error');
+                        return;
+                    }
+                    
+                    if (interval === 0) {
+                        // Disable auto-fog
+                        const response = await fetch('/api/auto-fog/disable', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('Server error');
+                        }
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            this.showMessage('Auto-Fog deaktiviert', 'info');
+                        } else {
+                            this.showMessage(result.error || 'Fehler beim Deaktivieren', 'error');
+                        }
+                    } else {
+                        // Enable auto-fog
+                        const response = await fetch('/api/auto-fog/enable', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ interval: interval })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('Server error');
+                        }
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            this.showMessage(`Auto-Fog aktiviert (alle ${interval} Min)`, 'success');
+                        } else {
+                            this.showMessage(result.error || 'Fehler beim Aktivieren', 'error');
+                        }
+                    }
+                    
+                    // Refresh status
+                    setTimeout(() => this.loadAutoFogStatus(), 500);
+                } catch (error) {
+                    console.error('Auto-Fog toggle error:', error);
+                    this.showMessage('Verbindungsfehler', 'error');
+                }
+            }
+
+            async loadUsageChart() {
+                try {
+                    const response = await fetch('/api/analytics/usage');
+                    const data = await response.json();
+                    
+                    if (data.success && data.hourlyData) {
+                        this.renderChart(data.hourlyData);
+                    } else {
+                        this.elements.usageChart.innerHTML = '<div style="color: var(--text-secondary);">Keine Daten verfügbar</div>';
+                    }
+                } catch (error) {
+                    console.error('Failed to load chart data:', error);
+                    this.elements.usageChart.innerHTML = '<div style="color: var(--accent-red);">Fehler beim Laden der Daten</div>';
+                }
+            }
+
+            renderChart(hourlyData) {
+                // Simple ASCII-style chart
+                const maxCount = Math.max(...hourlyData.map(d => d.count));
+                const chartHeight = 200;
+                
+                let chartHtml = '<div style="display: flex; align-items: end; height: 200px; gap: 2px; padding: 20px;">';
+                
+                hourlyData.forEach(data => {
+                    const height = maxCount > 0 ? (data.count / maxCount * chartHeight) : 0;
+                    const color = height > chartHeight * 0.7 ? 'var(--accent-red)' : 
+                                 height > chartHeight * 0.4 ? 'var(--accent-orange)' : 
+                                 'var(--accent-blue)';
+                    
+                    chartHtml += `
+                        <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
+                            <div style="
+                                width: 100%; 
+                                height: ${height}px; 
+                                background: ${color}; 
+                                border-radius: 2px 2px 0 0;
+                                margin-bottom: 5px;
+                                transition: all 0.3s ease;
+                            " title="${data.hour}:00 - ${data.count} Aktivierungen"></div>
+                            <div style="font-size: 0.7em; color: var(--text-secondary);">${data.hour}</div>
+                        </div>
+                    `;
+                });
+                
+                chartHtml += '</div>';
+                this.elements.usageChart.innerHTML = chartHtml;
             }
 
             showMessage(text, type = 'info') {

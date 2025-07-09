@@ -42,11 +42,16 @@ class RF433Controller:
         
         # Setup GPIO
         GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)  # Disable warnings for already configured pins
         GPIO.setup(self.gpio_pin, GPIO.OUT)
         GPIO.output(self.gpio_pin, GPIO.LOW)
         
-    def __del__(self):
-        GPIO.cleanup()
+    def cleanup(self):
+        """Explicit cleanup method"""
+        try:
+            GPIO.cleanup()
+        except:
+            pass  # Ignore cleanup errors
     
     def transmit_bit(self, bit):
         """Transmit a single bit using Protocol 1 timing"""
@@ -118,6 +123,7 @@ def main():
     
     args = parser.parse_args()
     
+    controller = None
     try:
         controller = RF433Controller(gpio_pin=args.gpio)
         controller.repeat_transmit = args.repeats
@@ -137,6 +143,10 @@ def main():
     except Exception as e:
         print(f"Error: {str(e)}")
         sys.exit(1)
+    finally:
+        # Ensure GPIO cleanup happens
+        if controller:
+            controller.cleanup()
 
 if __name__ == "__main__":
     main()

@@ -1,11 +1,16 @@
-# Fog Controller 🌫️
+# 💨 Fog Controller
 
 RF433 Nebelmaschinen-Steuerung via Raspberry Pi mit modernem Web-Interface.
+
+![Fog Controller Mockup](fog-controller-mockup-1.png)
 
 ## Features
 
 - **RF433 Steuerung**: Kontrolle von Nebelmaschinen über 433MHz RF-Signale
 - **Web Interface**: Modernes, responsives Dark-Theme Interface
+- **Auto-Fog**: Automatische Aktivierung alle 2/5/10 Minuten mit 1h Auto-Deaktivierung
+- **MySQL Integration**: Persistente Speicherung aller Aktivierungen mit Zeitstempel
+- **Usage Analytics**: Grafische Darstellung der Nutzung mit Peak-Hour-Analyse
 - **Status-Tracking**: Aktivierungszähler und Statistiken
 - **PWA-Support**: Installierbar als Progressive Web App
 - **API-Endpoints**: RESTful API für Integration
@@ -35,6 +40,13 @@ cd fog-controller
 # Dependencies installieren
 npm install
 
+# MySQL Setup (optional, für Analytics)
+mysql -u root -p < setup-database.sql
+
+# Umgebungsvariablen konfigurieren
+cp .env.example .env
+# Bearbeite .env mit deinen Datenbankdaten
+
 # Starten
 sudo npm start
 ```
@@ -44,8 +56,10 @@ sudo npm start
 Das Interface ist unter `http://raspberry-pi:5003` erreichbar und bietet:
 
 - **Großer Fog-Button**: Ein-/Ausschalten der Nebelmaschine
+- **Auto-Fog**: Automatische Aktivierung alle 2/5/10 Minuten
 - **Status-Anzeige**: Visueller Status mit Pulsing-Effekt
-- **Statistiken**: Aktivierungszähler und letzte Aktivierung
+- **Usage Analytics**: Grafische Darstellung der Nutzung über 24h
+- **Statistiken**: Aktivierungszähler, letzte Aktivierung und Peak-Hour
 - **Erweiterte Steuerung**: Separate Ein/Aus-Buttons
 
 ## API Endpoints
@@ -60,6 +74,18 @@ GET /api/status
 POST /api/fog/on      # Einschalten
 POST /api/fog/off     # Ausschalten
 POST /api/fog/toggle  # Umschalten
+```
+
+### Auto-Fog
+```bash
+GET /api/auto-fog/status              # Auto-Fog Status
+POST /api/auto-fog/enable             # Auto-Fog aktivieren
+POST /api/auto-fog/disable            # Auto-Fog deaktivieren
+```
+
+### Analytics
+```bash
+GET /api/analytics/usage              # Nutzungsstatistiken
 ```
 
 ### Statistiken
