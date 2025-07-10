@@ -242,8 +242,8 @@
 
         /* Control Buttons */
         .control-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+            display: flex;
+            justify-content: center;
             gap: var(--spacing-4);
             margin-top: var(--spacing-6);
         }
@@ -346,7 +346,8 @@
         /* Responsive */
         @media (max-width: 768px) {
             .container {
-                padding: var(--spacing-4);
+                padding: var(--spacing-2);
+                max-width: 100%;
             }
 
             .fog-button {
@@ -361,10 +362,15 @@
 
             .control-grid {
                 grid-template-columns: 1fr;
+                padding: 0 var(--spacing-2);
             }
 
             .stats-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .btn {
+                max-width: 300px;
             }
         }
     </style>
@@ -440,11 +446,8 @@
         <div class="card">
             <h2>Erweiterte Steuerung</h2>
             <div class="control-grid">
-                <button class="btn btn-primary" id="force-on">
-                    <span>🔵 Einschalten</span>
-                </button>
                 <button class="btn btn-danger" id="force-off">
-                    <span>🔴 Ausschalten</span>
+                    <span>🔴 NOTAUS</span>
                 </button>
             </div>
         </div>
