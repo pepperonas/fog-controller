@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Primary Meta Tags -->
+    <title>Fog Controller - RF433 Nebelmaschinen-Steuerung via Raspberry Pi</title>
+    <meta name="title" content="💨 Fog Controller - RF433 Nebelmaschinen-Steuerung via Raspberry Pi">
+    <meta name="description" content="Moderne Web-App zur Kontrolle Ihrer Nebelmaschine über 433MHz RF-Signale. Ein-/Aus-Steuerung mit Status-Tracking via Raspberry Pi.">
+    <meta name="keywords" content="Fog, Nebelmaschine, RF433, Raspberry Pi, Web Controller, GPIO Control">
+    <meta name="author" content="Fog Control App">
+    <meta name="robots" content="index, follow">
+    <meta name="language" content="German">
+    <meta name="revisit-after" content="7 days">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="http://localhost:5003/">
+    <meta property="og:title" content="Fog Controller - RF433 Nebelmaschinen-Steuerung">
+    <meta property="og:description" content="Moderne Web-App zur Kontrolle Ihrer Nebelmaschine über 433MHz RF-Signale via Raspberry Pi.">
+    <meta property="og:site_name" content="Fog Control">
+    <meta property="og:locale" content="de_DE">
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Fog Controller - RF433 Nebelmaschinen-Steuerung">
+    <meta name="twitter:description" content="Moderne Web-App zur Kontrolle Ihrer Nebelmaschine über 433MHz RF-Signale via Raspberry Pi.">
+    
+    <!-- Technical Meta Tags -->
+    <meta name="application-name" content="Fog Control">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Fog Control">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#2B2E3B">
+    <meta name="color-scheme" content="dark">
+
+    <!-- Favicon & App Icons -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Microsoft Tiles -->
+    <meta name="msapplication-TileColor" content="#2B2E3B">
+    <meta name="msapplication-TileImage" content="/android-chrome-192x192.png">
+
+    <style>
+        :root {
+            /* Farbschema */
+            --background-dark: #2B2E3B;
+            --background-darker: #252830;
+            --card-background: #343845;
+            --accent-blue: #688db1;
+            --accent-green: #9cb68f;
+            --accent-red: #e16162;
+            --accent-orange: #e4a853;
+            --text-primary: #d1d5db;
+            --text-secondary: #9ca3af;
+            --fog-active: #7c3aed;
+            --fog-inactive: #4b5563;
+
+            /* Schatten */
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.25);
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.15);
+
+            /* Abstände */
+            --spacing-1: 0.25rem;
+            --spacing-2: 0.5rem;
+            --spacing-3: 0.75rem;
+            --spacing-4: 1rem;
+            --spacing-6: 1.5rem;
+            --spacing-8: 2rem;
+            --spacing-12: 3rem;
+            --spacing-16: 4rem;
+
+            /* Rundungen */
+            --radius-sm: 0.25rem;
+            --radius: 0.5rem;
+            --radius-lg: 0.75rem;
+            --radius-xl: 1rem;
+
+            /* Typografie */
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--background-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .header {
+            background-color: var(--background-darker);
+            padding: var(--spacing-6);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            text-align: center;
+            color: var(--text-primary);
+            margin-bottom: var(--spacing-2);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--spacing-6);
+        }
+
+        .card {
+            background-color: var(--card-background);
+            border-radius: var(--radius-xl);
+            padding: var(--spacing-6);
+            margin-bottom: var(--spacing-6);
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-4);
+            color: var(--accent-blue);
+            text-align: center;
+        }
+
+        /* Fog Button */
+        .fog-button {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            border: 4px solid var(--fog-inactive);
+            background: var(--background-darker);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            margin: 0 auto var(--spacing-6);
+            position: relative;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .fog-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(124, 58, 237, 0.3);
+        }
+
+        .fog-button.active {
+            border-color: var(--fog-active);
+            background: rgba(124, 58, 237, 0.2);
+            box-shadow: 0 0 40px rgba(124, 58, 237, 0.6);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 40px rgba(124, 58, 237, 0.6);
+            }
+            50% {
+                box-shadow: 0 0 60px rgba(124, 58, 237, 0.8);
+            }
+            100% {
+                box-shadow: 0 0 40px rgba(124, 58, 237, 0.6);
+            }
+        }
+
+        .fog-button svg {
+            width: 80px;
+            height: 80px;
+            fill: var(--text-secondary);
+            transition: fill 0.3s ease;
+        }
+
+        .fog-button.active svg {
+            fill: var(--fog-active);
+        }
+
+        .fog-status {
+            text-align: center;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-8);
+        }
+
+        .fog-status.active {
+            color: var(--fog-active);
+        }
+
+        .fog-status.inactive {
+            color: var(--text-secondary);
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-4);
+            margin-bottom: var(--spacing-6);
+        }
+
+        .stat-card {
+            background: var(--background-darker);
+            padding: var(--spacing-4);
+            border-radius: var(--radius);
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: var(--spacing-1);
+        }
+
+        /* Control Buttons */
+        .control-grid {
+            display: flex;
+            justify-content: center;
+            gap: var(--spacing-4);
+            margin-top: var(--spacing-6);
+        }
+
+        .btn {
+            padding: var(--spacing-4) var(--spacing-6);
+            border: none;
+            border-radius: var(--radius);
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-2);
+            text-align: center;
+            min-height: 60px;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #5a7a9a;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn-danger {
+            background-color: var(--accent-red);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #d04f50;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Message */
+        .message {
+            position: fixed;
+            bottom: var(--spacing-6);
+            right: var(--spacing-6);
+            padding: var(--spacing-4) var(--spacing-6);
+            border-radius: var(--radius);
+            color: white;
+            font-weight: 500;
+            box-shadow: var(--shadow-lg);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            max-width: 400px;
+        }
+
+        .message.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .message.success {
+            background-color: var(--accent-green);
+        }
+
+        .message.error {
+            background-color: var(--accent-red);
+        }
+
+        .message.info {
+            background-color: var(--accent-blue);
+        }
+
+        /* Loading */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--accent-blue);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: var(--spacing-2);
+                max-width: 100%;
+            }
+
+            .fog-button {
+                width: 150px;
+                height: 150px;
+            }
+
+            .fog-button svg {
+                width: 60px;
+                height: 60px;
+            }
+
+            .control-grid {
+                grid-template-columns: 1fr;
+                padding: 0 var(--spacing-2);
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .btn {
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>💨 Fog Controller</h1>
+        <p style="text-align: center; color: var(--text-secondary); margin-top: var(--spacing-2);">
+            RF433 Nebelmaschinen-Steuerung via Raspberry Pi
+        </p>
+    </header>
+
+    <div class="container">
+        <!-- Main Control -->
+        <div class="card">
+            <h2>💨 Nebelmaschine Steuerung</h2>
+            <div class="fog-button" id="fog-btn">
+                <span style="font-size: 60px;">💨</span>
+            </div>
+            <div class="fog-status inactive" id="fog-status">
+                Nebelmaschine ist AUS
+            </div>
+        </div>
+
+        <!-- Auto-Fog Control -->
+        <div class="card">
+            <h2>Auto-Fog</h2>
+            <div style="display: flex; align-items: center; gap: var(--spacing-4); margin-bottom: var(--spacing-4);">
+                <label for="auto-fog-interval" style="font-weight: 500; color: var(--text-primary);">Intervall:</label>
+                <select id="auto-fog-interval" style="padding: var(--spacing-2) var(--spacing-3); border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.2); background: var(--background-darker); color: var(--text-primary); font-size: 1rem;">
+                    <option value="0">Deaktiviert</option>
+                    <option value="2">Alle 2 Minuten</option>
+                    <option value="5">Alle 5 Minuten</option>
+                    <option value="10">Alle 10 Minuten</option>
+                </select>
+                <button class="btn btn-primary" id="auto-fog-toggle" style="min-height: 40px; padding: var(--spacing-2) var(--spacing-4);">
+                    <span>Aktivieren</span>
+                </button>
+            </div>
+            <div class="auto-fog-status" id="auto-fog-status" style="text-align: center; padding: var(--spacing-3); border-radius: var(--radius); background: var(--background-darker); color: var(--text-secondary);">
+                Auto-Fog ist deaktiviert
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="card">
+            <h2>Statistik</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="activation-count">0</div>
+                    <div class="stat-label">Aktivierungen</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="last-activated">-</div>
+                    <div class="stat-label">Letzte Aktivierung</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="peak-hour">-</div>
+                    <div class="stat-label">Peak-Stunde</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Usage Chart -->
+        <div class="card">
+            <h2>Nutzungsverlauf</h2>
+            <div id="usage-chart" style="height: 300px; background: var(--background-darker); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
+                Chart wird geladen...
+            </div>
+        </div>
+
+        <!-- Additional Controls -->
+        <div class="card">
+            <h2>Erweiterte Steuerung</h2>
+            <div class="control-grid">
+                <button class="btn btn-danger" id="force-off">
+                    <span>🔴 NOTAUS</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="message" id="message"></div>
+
+    <script>
+        class FogController {
+            constructor() {
+                this.initializeElements();
+                this.attachEventListeners();
+                this.loadStatus();
+                this.loadAutoFogStatus();
+                // Auto-refresh status every 5 seconds
+                setInterval(() => this.loadStatus(), 5000);
+                setInterval(() => this.loadAutoFogStatus(), 10000);
+            }
+
+            initializeElements() {
+                this.elements = {
+                    fogBtn: document.getElementById('fog-btn'),
+                    fogStatus: document.getElementById('fog-status'),
+                    // forceOnBtn: document.getElementById('force-on'),
+                    forceOffBtn: document.getElementById('force-off'),
+                    activationCount: document.getElementById('activation-count'),
+                    lastActivated: document.getElementById('last-activated'),
+                    peakHour: document.getElementById('peak-hour'),
+                    autoFogInterval: document.getElementById('auto-fog-interval'),
+                    autoFogToggle: document.getElementById('auto-fog-toggle'),
+                    autoFogStatus: document.getElementById('auto-fog-status'),
+                    usageChart: document.getElementById('usage-chart'),
+                    message: document.getElementById('message')
+                };
+            }
+
+            attachEventListeners() {
+                // Main fog button (toggle)
+                this.elements.fogBtn.addEventListener('click', () => this.toggleFog());
+
+                // Force controls
+                // this.elements.forceOnBtn.addEventListener('click', () => this.turnOn());
+                this.elements.forceOffBtn.addEventListener('click', () => this.turnOff());
+
+                // Auto-fog controls
+                this.elements.autoFogToggle.addEventListener('click', () => this.toggleAutoFog());
+            }
+
+            async loadStatus() {
+                try {
+                    const response = await fetch('/api/status');
+                    const data = await response.json();
+                    
+                    // Update UI based on status
+                    this.updateUI(data.fogActive);
+                    
+                    // Update statistics
+                    this.elements.activationCount.textContent = data.activationCount || 0;
+                    
+                    if (data.lastActivated) {
+                        const date = new Date(data.lastActivated);
+                        this.elements.lastActivated.textContent = date.toLocaleTimeString('de-DE');
+                    } else {
+                        this.elements.lastActivated.textContent = '-';
+                    }
+                    
+                    // Update peak hour
+                    this.elements.peakHour.textContent = data.peakHour || '-';
+                    
+                    // Load usage chart
+                    this.loadUsageChart();
+                    
+                } catch (error) {
+                    console.error('Failed to load status:', error);
+                }
+            }
+
+            updateUI(isActive) {
+                if (isActive) {
+                    this.elements.fogBtn.classList.add('active');
+                    this.elements.fogStatus.classList.remove('inactive');
+                    this.elements.fogStatus.classList.add('active');
+                    this.elements.fogStatus.textContent = '🌫️ Nebelmaschine ist AN';
+                } else {
+                    this.elements.fogBtn.classList.remove('active');
+                    this.elements.fogStatus.classList.remove('active');
+                    this.elements.fogStatus.classList.add('inactive');
+                    this.elements.fogStatus.textContent = 'Nebelmaschine ist AUS';
+                }
+            }
+
+            async toggleFog() {
+                try {
+                    const response = await fetch('/api/fog/toggle', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.showMessage(`🌫️ ${result.message}`, 'success');
+                        this.updateUI(result.status === 'on');
+                        // Reload status to get updated stats
+                        setTimeout(() => this.loadStatus(), 500);
+                    } else {
+                        this.showMessage('Befehl fehlgeschlagen', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage('Verbindungsfehler', 'error');
+                }
+            }
+
+            async turnOn() {
+                try {
+                    const response = await fetch('/api/fog/on', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.showMessage('🌫️ Nebelmaschine eingeschaltet', 'success');
+                        this.updateUI(true);
+                        setTimeout(() => this.loadStatus(), 500);
+                    } else {
+                        this.showMessage('Einschalten fehlgeschlagen', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage('Verbindungsfehler', 'error');
+                }
+            }
+
+            async turnOff() {
+                try {
+                    const response = await fetch('/api/fog/off', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.showMessage('Nebelmaschine ausgeschaltet', 'success');
+                        this.updateUI(false);
+                        setTimeout(() => this.loadStatus(), 500);
+                    } else {
+                        this.showMessage('Ausschalten fehlgeschlagen', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage('Verbindungsfehler', 'error');
+                }
+            }
+
+            async loadAutoFogStatus() {
+                try {
+                    const response = await fetch('/api/auto-fog/status');
+                    const data = await response.json();
+                    
+                    if (data.active) {
+                        this.elements.autoFogInterval.value = data.interval;
+                        this.elements.autoFogToggle.textContent = 'Deaktivieren';
+                        this.elements.autoFogToggle.className = 'btn btn-danger';
+                        
+                        const remaining = Math.max(0, Math.ceil((data.autoDisableTime - Date.now()) / 1000 / 60));
+                        this.elements.autoFogStatus.innerHTML = `
+                            <span style="color: var(--accent-green);">
+                                ✅ Auto-Fog aktiv (alle ${data.interval} Min)
+                            </span><br>
+                            <span style="font-size: 0.9em;">
+                                Automatisch deaktiviert in ${remaining} Min
+                            </span>
+                        `;
+                        this.elements.autoFogStatus.style.background = 'rgba(156, 182, 143, 0.1)';
+                    } else {
+                        this.elements.autoFogToggle.textContent = 'Aktivieren';
+                        this.elements.autoFogToggle.className = 'btn btn-primary';
+                        this.elements.autoFogStatus.textContent = 'Auto-Fog ist deaktiviert';
+                        this.elements.autoFogStatus.style.background = 'var(--background-darker)';
+                    }
+                } catch (error) {
+                    console.error('Failed to load auto-fog status:', error);
+                }
+            }
+
+            async toggleAutoFog() {
+                try {
+                    const interval = parseInt(this.elements.autoFogInterval.value);
+                    
+                    // Validate interval value
+                    if (isNaN(interval) || ![0, 2, 5, 10].includes(interval)) {
+                        this.showMessage('Ungültiges Intervall', 'error');
+                        return;
+                    }
+                    
+                    if (interval === 0) {
+                        // Disable auto-fog
+                        const response = await fetch('/api/auto-fog/disable', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('Server error');
+                        }
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            this.showMessage('Auto-Fog deaktiviert', 'info');
+                        } else {
+                            this.showMessage(result.error || 'Fehler beim Deaktivieren', 'error');
+                        }
+                    } else {
+                        // Enable auto-fog
+                        const response = await fetch('/api/auto-fog/enable', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ interval: interval })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('Server error');
+                        }
+                        
+                        const result = await response.json();
+                        
+                        if (result.success) {
+                            this.showMessage(`Auto-Fog aktiviert (alle ${interval} Min)`, 'success');
+                        } else {
+                            this.showMessage(result.error || 'Fehler beim Aktivieren', 'error');
+                        }
+                    }
+                    
+                    // Refresh status
+                    setTimeout(() => this.loadAutoFogStatus(), 500);
+                } catch (error) {
+                    console.error('Auto-Fog toggle error:', error);
+                    this.showMessage('Verbindungsfehler', 'error');
+                }
+            }
+
+            async loadUsageChart() {
+                try {
+                    const response = await fetch('/api/analytics/usage');
+                    const data = await response.json();
+                    
+                    if (data.success && data.hourlyData) {
+                        this.renderChart(data.hourlyData);
+                    } else {
+                        this.elements.usageChart.innerHTML = '<div style="color: var(--text-secondary);">Keine Daten verfügbar</div>';
+                    }
+                } catch (error) {
+                    console.error('Failed to load chart data:', error);
+                    this.elements.usageChart.innerHTML = '<div style="color: var(--accent-red);">Fehler beim Laden der Daten</div>';
+                }
+            }
+
+            renderChart(hourlyData) {
+                // Simple ASCII-style chart
+                const maxCount = Math.max(...hourlyData.map(d => d.count));
+                const chartHeight = 200;
+                
+                let chartHtml = '<div style="display: flex; align-items: end; height: 200px; gap: 2px; padding: 20px;">';
+                
+                hourlyData.forEach(data => {
+                    const height = maxCount > 0 ? (data.count / maxCount * chartHeight) : 0;
+                    const color = height > chartHeight * 0.7 ? 'var(--accent-red)' : 
+                                 height > chartHeight * 0.4 ? 'var(--accent-orange)' : 
+                                 'var(--accent-blue)';
+                    
+                    chartHtml += `
+                        <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
+                            <div style="
+                                width: 100%; 
+                                height: ${height}px; 
+                                background: ${color}; 
+                                border-radius: 2px 2px 0 0;
+                                margin-bottom: 5px;
+                                transition: all 0.3s ease;
+                            " title="${data.hour}:00 - ${data.count} Aktivierungen"></div>
+                            <div style="font-size: 0.7em; color: var(--text-secondary);">${data.hour}</div>
+                        </div>
+                    `;
+                });
+                
+                chartHtml += '</div>';
+                this.elements.usageChart.innerHTML = chartHtml;
+            }
+
+            showMessage(text, type = 'info') {
+                this.elements.message.textContent = text;
+                this.elements.message.className = `message ${type} show`;
+
+                setTimeout(() => {
+                    this.elements.message.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Initialize the application
+        const controller = new FogController();
+    </script>
+</body>
+</html>
