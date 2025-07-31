@@ -343,7 +343,7 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Fog Animation - Enhanced Background Effect */
+        /* Fog Animation - Simplified Background Effect */
         .fog-background {
             position: fixed;
             top: 0;
@@ -353,115 +353,109 @@
             pointer-events: none;
             z-index: -1;
             opacity: 0;
-            transform: scale(0.9);
-            transition: opacity 2s ease-in-out, transform 2.5s ease-out;
+            transition: opacity 2s ease-in-out;
             overflow: hidden;
-            will-change: opacity, transform;
+            isolation: isolate;
         }
 
         .fog-background.active {
-            opacity: 0.6;
-            transform: scale(1.05);
-            transition: opacity 1.8s ease-out, transform 2.2s ease-out;
+            opacity: 0.7;
         }
 
         .fog-background.dissolving {
             opacity: 0;
-            transform: scale(1.15);
-            transition: opacity 5s ease-out, transform 6s ease-out;
+            transition: opacity 3s ease-out;
         }
 
         .fog-layer {
             position: absolute;
-            width: 130%;
-            height: 90%;
-            background: radial-gradient(ellipse 120% 70% at center, 
-                rgba(230, 230, 245, 0.3) 0%,
-                rgba(210, 210, 230, 0.25) 15%,
-                rgba(190, 190, 215, 0.2) 30%,
-                rgba(170, 170, 200, 0.15) 45%,
-                rgba(150, 150, 180, 0.1) 60%,
-                rgba(130, 130, 160, 0.06) 75%,
+            width: 140%;
+            height: 100%;
+            background: radial-gradient(ellipse 120% 80% at center, 
+                rgba(255, 255, 255, 0.35) 0%,
+                rgba(230, 230, 245, 0.3) 15%,
+                rgba(210, 210, 230, 0.25) 30%,
+                rgba(190, 190, 215, 0.2) 45%,
+                rgba(170, 170, 200, 0.15) 60%,
+                rgba(150, 150, 185, 0.1) 75%,
                 transparent 100%);
             border-radius: 50%;
-            filter: blur(22px);
+            filter: blur(30px);
             animation-iteration-count: infinite;
-            animation-timing-function: ease-in-out;
-            will-change: transform;
+            animation-timing-function: linear;
+            animation-fill-mode: both;
         }
 
         .fog-layer::before {
             content: '';
             position: absolute;
-            top: 15%;
-            left: 20%;
-            width: 70%;
-            height: 45%;
-            background: radial-gradient(ellipse,
-                rgba(240, 240, 255, 0.25) 0%,
-                rgba(220, 220, 240, 0.2) 25%,
-                rgba(200, 200, 220, 0.15) 50%,
-                rgba(180, 180, 200, 0.08) 75%,
-                transparent 100%);
-            border-radius: 50%;
-            filter: blur(20px);
-        }
-
-        .fog-layer::after {
-            content: '';
-            position: absolute;
-            bottom: 20%;
-            right: 15%;
-            width: 85%;
+            top: 20%;
+            left: 25%;
+            width: 60%;
             height: 40%;
             background: radial-gradient(ellipse,
-                rgba(210, 210, 235, 0.2) 0%,
-                rgba(190, 190, 215, 0.15) 35%,
-                rgba(170, 170, 195, 0.1) 65%,
+                rgba(240, 240, 255, 0.2) 0%,
+                rgba(220, 220, 240, 0.15) 30%,
+                rgba(200, 200, 220, 0.1) 60%,
                 transparent 100%);
             border-radius: 50%;
             filter: blur(25px);
         }
 
-        /* Links kommende Nebel-Schichten */
+        .fog-layer::after {
+            content: '';
+            position: absolute;
+            bottom: 25%;
+            right: 20%;
+            width: 70%;
+            height: 35%;
+            background: radial-gradient(ellipse,
+                rgba(220, 220, 235, 0.15) 0%,
+                rgba(200, 200, 215, 0.1) 40%,
+                rgba(180, 180, 195, 0.05) 70%,
+                transparent 100%);
+            border-radius: 50%;
+            filter: blur(28px);
+        }
+
+        /* Nebel-Schichten vereinfacht */
         .fog-layer-1 {
             top: 20%;
             left: -80%;
-            animation: fogFromLeft1 40s infinite;
-            opacity: 0.65;
+            animation: fogFromLeft1 45s infinite linear;
+            opacity: 0.6;
         }
 
         .fog-layer-2 {
             top: 60%;
             left: -90%;
-            animation: fogFromLeft2 55s infinite;
-            opacity: 0.55;
-            animation-delay: -10s;
+            animation: fogFromLeft2 60s infinite linear;
+            opacity: 0.5;
+            animation-delay: -15s;
         }
 
         .fog-layer-3 {
             top: 10%;
             right: -80%;
-            animation: fogFromRight1 45s infinite;
-            opacity: 0.6;
-            animation-delay: -20s;
+            animation: fogFromRight1 50s infinite linear;
+            opacity: 0.55;
+            animation-delay: -25s;
         }
 
-        /* Rechts kommende Nebel-Schichten */
         .fog-layer-4 {
             top: 45%;
             right: -90%;
-            animation: fogFromRight2 50s infinite;
-            opacity: 0.58;
-            animation-delay: -30s;
+            animation: fogFromRight2 55s infinite linear;
+            opacity: 0.52;
+            animation-delay: -35s;
         }
 
         .fog-layer-5 {
             top: 30%;
             left: -85%;
-            animation: fogFromLeft3 38s infinite;
-            opacity: 0.62;
-            animation-delay: -40s;
+            animation: fogFromLeft3 42s infinite linear;
+            opacity: 0.58;
+            animation-delay: -45s;
         }
 
         /* Animationen von links zur Mitte */
