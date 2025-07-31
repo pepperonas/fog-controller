@@ -8,6 +8,7 @@ RF433 Nebelmaschinen-Steuerung via Raspberry Pi mit modernem Web-Interface.
 
 - **🌫️ RF433 Steuerung**: Kontrolle von Nebelmaschinen über 433MHz RF-Signale mit GPIO 17
 - **💻 Web Interface**: Modernes, responsives Dark-Theme PWA-Interface mit Touch-Support
+- **✨ Realistische Nebel-Animation**: Animierte Hintergrund-Effekte beim Aktivieren der Nebelmaschine
 - **🤖 Auto-Fog**: Automatische Aktivierung alle 2/5/10 Minuten mit 1h Auto-Deaktivierung
 - **📊 MySQL Integration**: Persistente Speicherung aller Aktivierungen mit Zeitstempel
 - **📈 Usage Analytics**: 24h-Verlaufsgrafik mit Peak-Hour-Analyse
@@ -70,6 +71,13 @@ Das Interface ist unter `http://fog.pi.local` oder `http://localhost:5003` errei
   - Sendet einmaliges RF433-Signal pro Klick
   - Live-Status-Updates alle 5 Sekunden
   
+- **✨ Nebel-Animation**: Realistische Hintergrund-Effekte
+  - 5 animierte Nebel-Schichten mit verschiedenen Geschwindigkeiten
+  - Nebel schwebt von beiden Seiten zur Mitte des Bildschirms
+  - Langsame Einblendung beim Aktivieren (3s)
+  - Sanfte Auflösung beim Deaktivieren (4s)
+  - Läuft performance-optimiert im Hintergrund ohne UI-Beeinträchtigung
+  
 - **🤖 Auto-Fog System**: Automatisierte Aktivierung mit Zeitsteuerung
   - Intervall-Optionen: 2, 5 oder 10 Minuten
   - Automatische Deaktivierung nach 1 Stunde
@@ -81,7 +89,7 @@ Das Interface ist unter `http://fog.pi.local` oder `http://localhost:5003` errei
 - **📈 24h-Analytics**: Interaktive Stunden-Balkendiagramm der Nutzung
 - **🔴 Notaus-Button**: Sofortige Deaktivierung
 - **📱 PWA-Ready**: Installierbar auf Mobilgeräten
-- **🌙 Dark Theme**: Modernes, augenfreundliches Design
+- **🌙 Dark Theme**: Modernes, augenfreundliches Design mit Nebel-Effekten
 
 ## API Endpoints
 
@@ -203,6 +211,7 @@ npm run pm2:restart
 
 ### Architektur
 - **Frontend**: Vanilla JavaScript, CSS Grid, Dark Theme, PWA mit Service Worker
+- **Animation**: CSS3 Hardware-beschleunigte Nebel-Effekte mit `transform3d()`
 - **Backend**: Node.js/Express Server (Port 5003) mit CORS-Support
 - **Hardware**: Python 3 mit RPi.GPIO für präzise RF433-Timing
 - **Database**: MySQL 8+ für Analytics und Logging (optional, graceful fallback)

@@ -343,6 +343,159 @@
             to { transform: rotate(360deg); }
         }
 
+        /* Fog Animation - Simple Background Effect */
+        .fog-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 3s ease-in-out;
+            overflow: hidden;
+        }
+
+        .fog-background.active {
+            opacity: 1;
+        }
+
+        .fog-background.dissolving {
+            opacity: 0;
+            transition: opacity 4s ease-out;
+        }
+
+        .fog-layer {
+            position: absolute;
+            width: 120%;
+            height: 80%;
+            background: radial-gradient(ellipse 120% 60% at center, 
+                rgba(220, 220, 240, 0.25) 0%,
+                rgba(200, 200, 230, 0.2) 15%,
+                rgba(180, 180, 210, 0.15) 30%,
+                rgba(160, 160, 190, 0.1) 50%,
+                rgba(140, 140, 170, 0.05) 70%,
+                transparent 100%);
+            border-radius: 50%;
+            filter: blur(25px);
+            animation-iteration-count: infinite;
+            animation-timing-function: ease-in-out;
+        }
+
+        .fog-layer::before {
+            content: '';
+            position: absolute;
+            top: 15%;
+            left: 20%;
+            width: 70%;
+            height: 45%;
+            background: radial-gradient(ellipse,
+                rgba(240, 240, 255, 0.3) 0%,
+                rgba(220, 220, 240, 0.2) 25%,
+                rgba(200, 200, 220, 0.1) 50%,
+                transparent 100%);
+            border-radius: 50%;
+            filter: blur(20px);
+        }
+
+        .fog-layer::after {
+            content: '';
+            position: absolute;
+            bottom: 20%;
+            right: 15%;
+            width: 85%;
+            height: 40%;
+            background: radial-gradient(ellipse,
+                rgba(210, 210, 235, 0.25) 0%,
+                rgba(190, 190, 215, 0.15) 35%,
+                rgba(170, 170, 195, 0.08) 65%,
+                transparent 100%);
+            border-radius: 50%;
+            filter: blur(30px);
+        }
+
+        /* Links kommende Nebel-Schichten */
+        .fog-layer-1 {
+            top: 20%;
+            left: -80%;
+            animation: fogFromLeft1 40s infinite;
+            opacity: 0.6;
+        }
+
+        .fog-layer-2 {
+            top: 60%;
+            left: -90%;
+            animation: fogFromLeft2 55s infinite;
+            opacity: 0.5;
+            animation-delay: -10s;
+        }
+
+        .fog-layer-3 {
+            top: 10%;
+            right: -80%;
+            animation: fogFromRight1 45s infinite;
+            opacity: 0.55;
+            animation-delay: -20s;
+        }
+
+        /* Rechts kommende Nebel-Schichten */
+        .fog-layer-4 {
+            top: 45%;
+            right: -90%;
+            animation: fogFromRight2 50s infinite;
+            opacity: 0.5;
+            animation-delay: -30s;
+        }
+
+        .fog-layer-5 {
+            top: 30%;
+            left: -85%;
+            animation: fogFromLeft3 38s infinite;
+            opacity: 0.58;
+            animation-delay: -40s;
+        }
+
+        /* Animationen von links zur Mitte */
+        @keyframes fogFromLeft1 {
+            0% { transform: translate3d(-100vw, 0, 0) scale(0.8) rotate(0deg); }
+            25% { transform: translate3d(30vw, -5vh, 0) scale(1.1) rotate(45deg); }
+            50% { transform: translate3d(60vw, 3vh, 0) scale(0.95) rotate(90deg); }
+            75% { transform: translate3d(80vw, -2vh, 0) scale(1.05) rotate(135deg); }
+            100% { transform: translate3d(120vw, 0, 0) scale(0.9) rotate(180deg); }
+        }
+
+        @keyframes fogFromLeft2 {
+            0% { transform: translate3d(-120vw, 0, 0) scale(1.1) rotate(0deg); }
+            30% { transform: translate3d(20vw, 8vh, 0) scale(0.9) rotate(60deg); }
+            60% { transform: translate3d(50vw, -4vh, 0) scale(1.15) rotate(120deg); }
+            100% { transform: translate3d(130vw, 2vh, 0) scale(0.85) rotate(180deg); }
+        }
+
+        @keyframes fogFromLeft3 {
+            0% { transform: translate3d(-110vw, 0, 0) scale(0.9) rotate(0deg); }
+            20% { transform: translate3d(15vw, -8vh, 0) scale(1.2) rotate(36deg); }
+            40% { transform: translate3d(45vw, 6vh, 0) scale(0.85) rotate(72deg); }
+            70% { transform: translate3d(75vw, -3vh, 0) scale(1.08) rotate(126deg); }
+            100% { transform: translate3d(125vw, 1vh, 0) scale(0.95) rotate(180deg); }
+        }
+
+        /* Animationen von rechts zur Mitte */
+        @keyframes fogFromRight1 {
+            0% { transform: translate3d(100vw, 0, 0) scale(0.85) rotate(0deg); }
+            25% { transform: translate3d(-25vw, 4vh, 0) scale(1.05) rotate(-45deg); }
+            50% { transform: translate3d(-55vw, -6vh, 0) scale(0.92) rotate(-90deg); }
+            75% { transform: translate3d(-75vw, 2vh, 0) scale(1.12) rotate(-135deg); }
+            100% { transform: translate3d(-115vw, 0, 0) scale(0.88) rotate(-180deg); }
+        }
+
+        @keyframes fogFromRight2 {
+            0% { transform: translate3d(125vw, 0, 0) scale(1.0) rotate(0deg); }
+            35% { transform: translate3d(-20vw, -7vh, 0) scale(0.95) rotate(-70deg); }
+            65% { transform: translate3d(-60vw, 5vh, 0) scale(1.18) rotate(-130deg); }
+            100% { transform: translate3d(-120vw, -1vh, 0) scale(0.9) rotate(-180deg); }
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .container {
@@ -376,6 +529,15 @@
     </style>
 </head>
 <body>
+    <!-- Fog Animation Background -->
+    <div class="fog-background" id="fog-background">
+        <div class="fog-layer fog-layer-1"></div>
+        <div class="fog-layer fog-layer-2"></div>
+        <div class="fog-layer fog-layer-3"></div>
+        <div class="fog-layer fog-layer-4"></div>
+        <div class="fog-layer fog-layer-5"></div>
+    </div>
+
     <header class="header">
         <h1>💨 Fog Controller</h1>
         <p style="text-align: center; color: var(--text-secondary); margin-top: var(--spacing-2);">
@@ -471,6 +633,7 @@
                 this.elements = {
                     fogBtn: document.getElementById('fog-btn'),
                     fogStatus: document.getElementById('fog-status'),
+                    fogBackground: document.getElementById('fog-background'),
                     // forceOnBtn: document.getElementById('force-on'),
                     forceOffBtn: document.getElementById('force-off'),
                     activationCount: document.getElementById('activation-count'),
@@ -530,12 +693,21 @@
                     this.elements.fogBtn.classList.add('active');
                     this.elements.fogStatus.classList.remove('inactive');
                     this.elements.fogStatus.classList.add('active');
-                    this.elements.fogStatus.textContent = '🌫️ Nebelmaschine ist AN';
+                    this.elements.fogStatus.textContent = 'Nebelmaschine ist AN';
+                    // Aktiviere realistische Nebel-Animation im Hintergrund
+                    this.elements.fogBackground.classList.remove('dissolving');
+                    this.elements.fogBackground.classList.add('active');
                 } else {
                     this.elements.fogBtn.classList.remove('active');
                     this.elements.fogStatus.classList.remove('active');
                     this.elements.fogStatus.classList.add('inactive');
                     this.elements.fogStatus.textContent = 'Nebelmaschine ist AUS';
+                    // Langsamer Auflöse-Effekt des Nebels
+                    this.elements.fogBackground.classList.add('dissolving');
+                    setTimeout(() => {
+                        this.elements.fogBackground.classList.remove('active');
+                        this.elements.fogBackground.classList.remove('dissolving');
+                    }, 4000);
                 }
             }
 
