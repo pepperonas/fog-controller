@@ -71,12 +71,13 @@ Das Interface ist unter `http://fog.pi.local` oder `http://localhost:5003` errei
   - Sendet einmaliges RF433-Signal pro Klick
   - Live-Status-Updates alle 5 Sekunden
   
-- **✨ Nebel-Animation**: Realistische Hintergrund-Effekte
-  - 5 animierte Nebel-Schichten mit verschiedenen Geschwindigkeiten
-  - Nebel schwebt von beiden Seiten zur Mitte des Bildschirms
-  - Langsame Einblendung beim Aktivieren (3s)
-  - Sanfte Auflösung beim Deaktivieren (4s)
-  - Läuft performance-optimiert im Hintergrund ohne UI-Beeinträchtigung
+- **✨ Verbesserte Nebel-Animation**: Dramatische, aber dezente Hintergrund-Effekte
+  - 5 animierte Nebel-Schichten mit realistischen Bewegungsmustern
+  - Nebel schwebt flüssig von beiden Seiten zur Mitte des Bildschirms
+  - Sichtbare Erscheinungs-Animation mit Zoom-Effekt (1.8s)
+  - Längere Auflöse-Animation mit Expansions-Effekt (5-6s)
+  - Hardware-beschleunigte CSS3-Animationen ohne GUI-Flackern
+  - Performance-optimiert mit `will-change` Properties
   
 - **🤖 Auto-Fog System**: Automatisierte Aktivierung mit Zeitsteuerung
   - Intervall-Optionen: 2, 5 oder 10 Minuten
@@ -211,7 +212,7 @@ npm run pm2:restart
 
 ### Architektur
 - **Frontend**: Vanilla JavaScript, CSS Grid, Dark Theme, PWA mit Service Worker
-- **Animation**: CSS3 Hardware-beschleunigte Nebel-Effekte mit `transform3d()`
+- **Animation**: Optimierte CSS3-Nebel-Effekte mit GPU-Beschleunigung und flackerfreier Performance
 - **Backend**: Node.js/Express Server (Port 5003) mit CORS-Support
 - **Hardware**: Python 3 mit RPi.GPIO für präzise RF433-Timing
 - **Database**: MySQL 8+ für Analytics und Logging (optional, graceful fallback)
