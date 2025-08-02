@@ -40,9 +40,22 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    
+    <!-- Apple Touch Icons for Homescreen -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="57x57" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="72x72" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="76x76" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="114x114" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="144x144" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    
+    <!-- Android Icons for Homescreen -->
     <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png">
+    <link rel="shortcut icon" href="/apple-touch-icon.png" />
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json">
@@ -343,7 +356,7 @@
             to { transform: rotate(360deg); }
         }
 
-        /* Fog Animation - Simplified Background Effect */
+        /* Fog Animation - Performance Optimized */
         .fog-background {
             position: fixed;
             top: 0;
@@ -356,10 +369,13 @@
             transition: opacity 2s ease-in-out;
             overflow: hidden;
             isolation: isolate;
+            /* Performance optimizations */
+            will-change: opacity;
+            contain: layout style paint;
         }
 
         .fog-background.active {
-            opacity: 0.7;
+            opacity: 0.9;
         }
 
         .fog-background.dissolving {
@@ -367,135 +383,74 @@
             transition: opacity 3s ease-out;
         }
 
+        /* Sichtbarere Nebel-Layer ohne Performance-Verlust */
         .fog-layer {
             position: absolute;
-            width: 140%;
-            height: 100%;
-            background: radial-gradient(ellipse 120% 80% at center, 
-                rgba(255, 255, 255, 0.35) 0%,
-                rgba(230, 230, 245, 0.3) 15%,
-                rgba(210, 210, 230, 0.25) 30%,
-                rgba(190, 190, 215, 0.2) 45%,
-                rgba(170, 170, 200, 0.15) 60%,
-                rgba(150, 150, 185, 0.1) 75%,
+            width: 160%;
+            height: 110%;
+            background: radial-gradient(ellipse 130% 90% at center, 
+                rgba(255, 255, 255, 0.5) 0%,
+                rgba(240, 240, 255, 0.45) 15%,
+                rgba(220, 220, 240, 0.4) 30%,
+                rgba(200, 200, 225, 0.3) 50%,
+                rgba(180, 180, 210, 0.2) 70%,
+                rgba(160, 160, 195, 0.1) 85%,
                 transparent 100%);
             border-radius: 50%;
-            filter: blur(30px);
+            filter: blur(20px);
             animation-iteration-count: infinite;
             animation-timing-function: linear;
             animation-fill-mode: both;
+            /* Hardware acceleration beibehalten */
+            will-change: transform;
+            transform: translateZ(0);
+            backface-visibility: hidden;
         }
 
-        .fog-layer::before {
-            content: '';
-            position: absolute;
-            top: 20%;
-            left: 25%;
-            width: 60%;
-            height: 40%;
-            background: radial-gradient(ellipse,
-                rgba(240, 240, 255, 0.2) 0%,
-                rgba(220, 220, 240, 0.15) 30%,
-                rgba(200, 200, 220, 0.1) 60%,
-                transparent 100%);
-            border-radius: 50%;
-            filter: blur(25px);
-        }
-
-        .fog-layer::after {
-            content: '';
-            position: absolute;
-            bottom: 25%;
-            right: 20%;
-            width: 70%;
-            height: 35%;
-            background: radial-gradient(ellipse,
-                rgba(220, 220, 235, 0.15) 0%,
-                rgba(200, 200, 215, 0.1) 40%,
-                rgba(180, 180, 195, 0.05) 70%,
-                transparent 100%);
-            border-radius: 50%;
-            filter: blur(28px);
-        }
-
-        /* Nebel-Schichten vereinfacht */
+        /* Sichtbarere Hauptnebel-Schichten */
         .fog-layer-1 {
-            top: 20%;
-            left: -80%;
-            animation: fogFromLeft1 45s infinite linear;
-            opacity: 0.6;
+            top: 15%;
+            left: -85%;
+            animation: fogSimple1 35s infinite linear;
+            opacity: 0.8;
         }
 
         .fog-layer-2 {
-            top: 60%;
-            left: -90%;
-            animation: fogFromLeft2 60s infinite linear;
-            opacity: 0.5;
-            animation-delay: -15s;
+            top: 55%;
+            left: -95%;
+            animation: fogSimple2 45s infinite linear;
+            opacity: 0.7;
+            animation-delay: -18s;
         }
 
         .fog-layer-3 {
-            top: 10%;
-            right: -80%;
-            animation: fogFromRight1 50s infinite linear;
-            opacity: 0.55;
-            animation-delay: -25s;
+            top: 5%;
+            right: -85%;
+            animation: fogSimple3 40s infinite linear;
+            opacity: 0.75;
+            animation-delay: -30s;
         }
 
-        .fog-layer-4 {
-            top: 45%;
-            right: -90%;
-            animation: fogFromRight2 55s infinite linear;
-            opacity: 0.52;
-            animation-delay: -35s;
+        /* Sichtbarere Animationen mit sanften Bewegungen */
+        @keyframes fogSimple1 {
+            0% { transform: translate3d(-110vw, 0, 0) scale(0.7); }
+            30% { transform: translate3d(20vw, -3vh, 0) scale(1.2); }
+            70% { transform: translate3d(70vw, 2vh, 0) scale(0.9); }
+            100% { transform: translate3d(130vw, 0, 0) scale(0.8); }
         }
 
-        .fog-layer-5 {
-            top: 30%;
-            left: -85%;
-            animation: fogFromLeft3 42s infinite linear;
-            opacity: 0.58;
-            animation-delay: -45s;
+        @keyframes fogSimple2 {
+            0% { transform: translate3d(-130vw, 0, 0) scale(0.9); }
+            35% { transform: translate3d(10vw, 4vh, 0) scale(0.8); }
+            65% { transform: translate3d(60vw, -2vh, 0) scale(1.1); }
+            100% { transform: translate3d(140vw, 1vh, 0) scale(0.85); }
         }
 
-        /* Animationen von links zur Mitte */
-        @keyframes fogFromLeft1 {
-            0% { transform: translate3d(-100vw, 0, 0) scale(0.8) rotate(0deg); }
-            25% { transform: translate3d(30vw, -5vh, 0) scale(1.1) rotate(45deg); }
-            50% { transform: translate3d(60vw, 3vh, 0) scale(0.95) rotate(90deg); }
-            75% { transform: translate3d(80vw, -2vh, 0) scale(1.05) rotate(135deg); }
-            100% { transform: translate3d(120vw, 0, 0) scale(0.9) rotate(180deg); }
-        }
-
-        @keyframes fogFromLeft2 {
-            0% { transform: translate3d(-120vw, 0, 0) scale(1.1) rotate(0deg); }
-            30% { transform: translate3d(20vw, 8vh, 0) scale(0.9) rotate(60deg); }
-            60% { transform: translate3d(50vw, -4vh, 0) scale(1.15) rotate(120deg); }
-            100% { transform: translate3d(130vw, 2vh, 0) scale(0.85) rotate(180deg); }
-        }
-
-        @keyframes fogFromLeft3 {
-            0% { transform: translate3d(-110vw, 0, 0) scale(0.9) rotate(0deg); }
-            20% { transform: translate3d(15vw, -8vh, 0) scale(1.2) rotate(36deg); }
-            40% { transform: translate3d(45vw, 6vh, 0) scale(0.85) rotate(72deg); }
-            70% { transform: translate3d(75vw, -3vh, 0) scale(1.08) rotate(126deg); }
-            100% { transform: translate3d(125vw, 1vh, 0) scale(0.95) rotate(180deg); }
-        }
-
-        /* Animationen von rechts zur Mitte */
-        @keyframes fogFromRight1 {
-            0% { transform: translate3d(100vw, 0, 0) scale(0.85) rotate(0deg); }
-            25% { transform: translate3d(-25vw, 4vh, 0) scale(1.05) rotate(-45deg); }
-            50% { transform: translate3d(-55vw, -6vh, 0) scale(0.92) rotate(-90deg); }
-            75% { transform: translate3d(-75vw, 2vh, 0) scale(1.12) rotate(-135deg); }
-            100% { transform: translate3d(-115vw, 0, 0) scale(0.88) rotate(-180deg); }
-        }
-
-        @keyframes fogFromRight2 {
-            0% { transform: translate3d(125vw, 0, 0) scale(1.0) rotate(0deg); }
-            35% { transform: translate3d(-20vw, -7vh, 0) scale(0.95) rotate(-70deg); }
-            65% { transform: translate3d(-60vw, 5vh, 0) scale(1.18) rotate(-130deg); }
-            100% { transform: translate3d(-120vw, -1vh, 0) scale(0.9) rotate(-180deg); }
+        @keyframes fogSimple3 {
+            0% { transform: translate3d(110vw, 0, 0) scale(0.8); }
+            25% { transform: translate3d(10vw, 3vh, 0) scale(1.15); }
+            75% { transform: translate3d(-60vw, -1vh, 0) scale(0.95); }
+            100% { transform: translate3d(-130vw, 2vh, 0) scale(0.9); }
         }
 
         /* Responsive */
@@ -531,13 +486,12 @@
     </style>
 </head>
 <body>
-    <!-- Fog Animation Background -->
+    <!-- Fog Animation Background - Simplified -->
     <div class="fog-background" id="fog-background">
+        <!-- Nur 3 Hauptnebel-Schichten für optimale Performance -->
         <div class="fog-layer fog-layer-1"></div>
         <div class="fog-layer fog-layer-2"></div>
         <div class="fog-layer fog-layer-3"></div>
-        <div class="fog-layer fog-layer-4"></div>
-        <div class="fog-layer fog-layer-5"></div>
     </div>
 
     <header class="header">
