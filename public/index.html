@@ -35,27 +35,36 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#2B2E3B">
     <meta name="color-scheme" content="dark">
+    
+    <!-- Samsung Browser & Android specific -->
+    <meta name="msapplication-TileColor" content="#2B2E3B">
+    <meta name="msapplication-TileImage" content="/apple-touch-icon.png">
+    <meta name="msapplication-square70x70logo" content="/apple-touch-icon.png">
+    <meta name="msapplication-square150x150logo" content="/apple-touch-icon.png">
+    <meta name="msapplication-square310x310logo" content="/apple-touch-icon.png">
+    
+    <!-- Additional Android Chrome meta tags -->
+    <meta name="mobile-web-app-title" content="Fog Control">
+    <meta name="mobile-web-app-status-bar-style" content="black-translucent">
 
-    <!-- Favicon & App Icons -->
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <!-- Primary Icons (Samsung Browser S24 Ultra priority) with cache busting -->
+    <link rel="shortcut icon" href="/favicon.ico?v=2025080201" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico?v=2025080201" type="image/x-icon">
     
-    <!-- Apple Touch Icons for Homescreen -->
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="57x57" href="/apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="72x72" href="/apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="76x76" href="/apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="114x114" href="/apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="120x120" href="/apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="144x144" href="/apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- Apple Touch Icons for iOS and Samsung fallback -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2025080201">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2025080201">
     
-    <!-- Android Icons for Homescreen -->
+    <!-- Samsung Browser S24 Ultra specific icons -->
     <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png">
-    <link rel="shortcut icon" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/apple-touch-icon.png" color="#2B2E3B">
+    
+    <!-- Standard sizes for broad compatibility -->
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="144x144" href="/apple-touch-icon.png">
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json">
