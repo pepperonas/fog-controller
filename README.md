@@ -91,6 +91,7 @@ Das Interface ist unter `http://fog.pi.local` oder `http://localhost:5003` errei
 - **🔴 Notaus-Button**: Sofortige Deaktivierung
 - **📱 PWA-Ready**: Installierbar auf Mobilgeräten
 - **🌙 Dark Theme**: Modernes, augenfreundliches Design mit Nebel-Effekten
+- **📲 Installierbar**: Als App auf Smartphone-Homescreen mit korrekten Favicons
 
 ## API Endpoints
 
