@@ -215,7 +215,7 @@ npm run pm2:restart
 - **Frontend**: Vanilla JavaScript, CSS Grid, Dark Theme, PWA mit Service Worker
 - **Animation**: Performance-optimierte CSS3-Nebel-Effekte - 3 Layer, GPU-beschleunigt, flackerfrei
 - **Backend**: Node.js/Express Server (Port 5003) mit CORS-Support
-- **Hardware**: Python 3 mit RPi.GPIO für präzise RF433-Timing
+- **Hardware**: Python 3 mit lgpio für präzise RF433-Timing (RPi.GPIO-kompatibel)
 - **Database**: MySQL 8+ für Analytics und Logging (optional, graceful fallback)
 - **Deployment**: PM2 für Production-Deployment mit automatischem Restart
 - **Scheduling**: Node-cron für Auto-Fog mit 1h Auto-Disable
@@ -247,6 +247,7 @@ Das System implementiert das RCSwitch-kompatible Protokoll 1 mit:
 
 ### Troubleshooting
 - **GPIO-Berechtigungen**: `sudo` erforderlich für Hardware-Zugriff
+- **GPIO-Library**: Bei "Cannot determine SOC peripheral base address" Fehler von RPi.GPIO auf lgpio gewechselt
 - **Datenbank-Verbindung**: MySQL auf 127.0.0.1:3306, läuft ohne DB weiter
 - **Port-Konflikte**: Standard-Port 5003, konfigurierbar über PORT env var
 - **RF-Reichweite**: Optimale Reichweite bei freier Sicht, 433MHz-Interferenzen beachten

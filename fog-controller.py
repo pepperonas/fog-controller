@@ -16,7 +16,7 @@ Protocol details from Arduino code:
 - OFF Code: 4543792
 """
 
-import RPi.GPIO as GPIO
+import lgpio
 import time
 import argparse
 import sys
@@ -40,16 +40,15 @@ class RF433Controller:
         self.one_high = 3
         self.one_low = 1
         
-        # Setup GPIO
-        GPIO.setmode(GPIO.BCM)
-        GPIO.setwarnings(False)  # Disable warnings for already configured pins
-        GPIO.setup(self.gpio_pin, GPIO.OUT)
-        GPIO.output(self.gpio_pin, GPIO.LOW)
+        # Setup GPIO using lgpio
+        self.handle = lgpio.gpiochip_open(0)
+        lgpio.gpio_claim_output(self.handle, self.gpio_pin)
+        lgpio.gpio_write(self.handle, self.gpio_pin, 0)
         
     def cleanup(self):
         """Explicit cleanup method"""
         try:
-            GPIO.cleanup()
+            lgpio.gpiochip_close(self.handle)
         except:
             pass  # Ignore cleanup errors
     
@@ -57,22 +56,22 @@ class RF433Controller:
         """Transmit a single bit using Protocol 1 timing"""
         if bit:
             # Send '1' bit: HIGH for 3 units, LOW for 1 unit
-            GPIO.output(self.gpio_pin, GPIO.HIGH)
+            lgpio.gpio_write(self.handle, self.gpio_pin, 1)
             time.sleep((self.one_high * self.pulse_length) / 1000000.0)
-            GPIO.output(self.gpio_pin, GPIO.LOW)
+            lgpio.gpio_write(self.handle, self.gpio_pin, 0)
             time.sleep((self.one_low * self.pulse_length) / 1000000.0)
         else:
             # Send '0' bit: HIGH for 1 unit, LOW for 3 units
-            GPIO.output(self.gpio_pin, GPIO.HIGH)
+            lgpio.gpio_write(self.handle, self.gpio_pin, 1)
             time.sleep((self.zero_high * self.pulse_length) / 1000000.0)
-            GPIO.output(self.gpio_pin, GPIO.LOW)
+            lgpio.gpio_write(self.handle, self.gpio_pin, 0)
             time.sleep((self.zero_low * self.pulse_length) / 1000000.0)
     
     def transmit_sync(self):
         """Send sync signal: HIGH for 1 unit, LOW for 31 units"""
-        GPIO.output(self.gpio_pin, GPIO.HIGH)
+        lgpio.gpio_write(self.handle, self.gpio_pin, 1)
         time.sleep((self.sync_high * self.pulse_length) / 1000000.0)
-        GPIO.output(self.gpio_pin, GPIO.LOW)
+        lgpio.gpio_write(self.handle, self.gpio_pin, 0)
         time.sleep((self.sync_low * self.pulse_length) / 1000000.0)
     
     def send_code(self, code, length=24):
@@ -87,7 +86,7 @@ class RF433Controller:
             self.transmit_sync()
         
         # Ensure pin is low after transmission
-        GPIO.output(self.gpio_pin, GPIO.LOW)
+        lgpio.gpio_write(self.handle, self.gpio_pin, 0)
     
     def turn_on(self):
         """Turn the fog machine ON"""
