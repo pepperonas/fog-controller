@@ -23,39 +23,36 @@ RF433 fog machine controller for Raspberry Pi with a modern web interface, auto-
 ## Wiring Diagram
 
 ```
-    Raspberry Pi                     RF433 Transmitter Module
-    ┌──────────────┐                 ┌─────────────────────┐
-    │              │                 │                     │
-    │   GPIO 17 ●──┼────────────────►│ DATA                │
-    │   (Pin 11)   │                 │                     │
-    │              │                 │                     │
-    │      5V  ●───┼────────────────►│ VCC                 │
-    │   (Pin 2)    │                 │                     │
-    │              │                 │                     │
-    │      GND ●───┼────────────────►│ GND                 │
-    │   (Pin 6)    │                 │                     │
-    └──────────────┘                 └──────────┬──────────┘
-                                                │ Antenna
-                                                │ (17cm wire)
-                                                │
-                                     ┌──────────▼──────────┐
-                                     │   Fog Machine       │
-                                     │   (433 MHz receiver) │
-                                     │                     │
-                                     │   ON:  0x454B8C     │
-                                     │   OFF: 0x454BB0     │
-                                     └─────────────────────┘
+    Raspberry Pi                         RF433 Transmitter Module
+    ┌──────────────┐                     ┌────────────────────┐
+    │              │                     │                    │
+    │  GPIO17(11) ─┼─────────────────────┤── DATA             │
+    │              │                     │                    │
+    │    5V   (2) ─┼─────────────────────┤── VCC              │┐
+    │              │                     │                    ││ Antenna
+    │   GND   (6) ─┼─────────────────────┤── GND              ││ (17cm wire)
+    │              │                     │                    │┘
+    └──────────────┘                     └────────────────────┘
+                                                  ·  ·  ·
+                                            433 MHz wireless
+                                                  ·  ·  ·
+                                         ┌────────────────────┐
+                                         │    Fog Machine     │
+                                         │   (433MHz Rx)      │
+                                         │                    │
+                                         │  ON:  0x454B8C     │
+                                         │  OFF: 0x454BB0     │
+                                         └────────────────────┘
 
-    Pin Mapping:
-    ┌──────────┬──────────┬─────────────────────────┐
-    │ Pi Pin   │ GPIO     │ Connection              │
-    ├──────────┼──────────┼─────────────────────────┤
-    │ Pin 11   │ GPIO 17  │ RF433 DATA              │
-    │ Pin 2    │ 5V       │ RF433 VCC               │
-    │ Pin 6    │ GND      │ RF433 GND               │
-    └──────────┴──────────┴─────────────────────────┘
+    Protocol 1 · 320µs pulse · 24-bit codes · 10x repeat
 
-    Protocol: Standard RF Protocol 1, 320µs pulse, 24-bit codes
+    ┌──────────┬──────────┬──────────────────────────────────┐
+    │ Pi Pin   │ GPIO     │ Connection                       │
+    ├──────────┼──────────┼──────────────────────────────────┤
+    │ Pin 11   │ GPIO 17  │ RF433 DATA                       │
+    │ Pin 2    │ 5V       │ RF433 VCC                        │
+    │ Pin 6    │ GND      │ RF433 GND                        │
+    └──────────┴──────────┴──────────────────────────────────┘
 ```
 
 > **Note:** For better range, solder a 17cm straight wire as antenna to the RF433 transmitter. Uses lgpio for GPIO access.
