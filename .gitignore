@@ -4,3 +4,6 @@ logs/
 fog-config.json
 *.backup
 .DS_Store
+
+venv/
+__pycache__/

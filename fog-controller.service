@@ -1,0 +1,16 @@
+[Unit]
+Description=Fog Controller — RF433 fog machine (Flask + RPi.GPIO)
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+SupplementaryGroups=gpio
+WorkingDirectory=/home/pi/apps/fog-controller
+ExecStart=/home/pi/apps/fog-controller/venv/bin/python server.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
