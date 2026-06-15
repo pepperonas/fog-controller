@@ -1,5 +1,11 @@
 # Fog Controller
 
+> **⚡ Update 2026-06 — Stack & UI**
+>
+> - **Backend:** Python/**Flask** (migriert von Node/Express). RF433-Bit-Bang (`fog-controller.py`, RPi.GPIO, GPIO 17) läuft **in-process als `pi`** (kein sudo/Subprozess), DB-Logging via **PyMySQL**, Auto-Fog im Hintergrund-Thread. **systemd** `fog-controller`. ~35 MB. Sicherheit: Fog startet nie automatisch.
+> - **UI:** **Material Design 3 Expressive** + Spring-Animationen (gestaffelte Karten-Entrance); NOTAUS im Error-Rot.
+> - **Deploy:** `git pull && sudo systemctl restart fog-controller`
+
 <div align="center">
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
