@@ -517,6 +517,52 @@ h1,.header,header,.app-header{animation:md-drop .55s var(--ease-emph,cubic-bezie
 .card:hover,.control-section:hover{transform:translateY(-3px)}
 @media(prefers-reduced-motion:reduce){*{animation:none!important}}
 
+/* MD3 Expressive Animations (2026-06-16) */
+:root {
+    --md-ease-spatial: linear(0,0.009 1.2%,0.035 2.5%,0.158 6%,0.793 18.4%,0.984 23%,1.07 27%,1.104 31.5%,1.103 35%,1.07 41%,1.013 50%,0.991 57%,0.998 75%,1);
+    --md-ease-effects: cubic-bezier(0.2,0,0,1);
+}
+@keyframes md-enter2 { from{opacity:0;transform:translateY(24px) scale(.96)} to{opacity:1;transform:none} }
+@keyframes md-breathe2 { 0%,100%{box-shadow:0 0 0 0 rgba(170,199,255,0)} 50%{box-shadow:0 0 26px 2px rgba(170,199,255,.35)} }
+/* Cards/Panels: staggered entrance, backwards fill so clicks work after entrance */
+.card { animation: md-enter2 .5s var(--md-ease-spatial) backwards; }
+.card:nth-of-type(1) { animation-delay: .04s; }
+.card:nth-of-type(2) { animation-delay: .10s; }
+.card:nth-of-type(3) { animation-delay: .16s; }
+.card:nth-of-type(4) { animation-delay: .22s; }
+.card:nth-of-type(5) { animation-delay: .28s; }
+.card:nth-of-type(6) { animation-delay: .34s; }
+/* Buttons: spring press + hover lift */
+.btn { transition: transform .4s var(--md-ease-spatial), box-shadow .2s var(--md-ease-effects), filter .2s var(--md-ease-effects); }
+.btn:active { transform: scale(.95); }
+.btn:not(:disabled):hover { transform: translateY(-2px); filter: brightness(1.06); }
+/* Active (fog on) state: breathing glow */
+.fog-button.active, .fog-status.active { animation: md-breathe2 2.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+    .card, .btn, .fog-button.active, .fog-status.active { animation: none!important; transition: none!important; }
+}
+
+/* ===== Obsessive-Detail Politur (2026-06-16) — additiv, kein Umbau =====
+   Klammer: tonale MD3-Flächen, die unter dem Cursor Licht fangen. ===== */
+:root{ --ease-quick:cubic-bezier(.2,0,0,1); }
+button:focus-visible,a[href]:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[role="button"]:focus-visible,[tabindex]:not([tabindex="-1"]):focus-visible{
+  outline:2px solid var(--accent-blue, var(--md-primary, var(--primary, #aac7ff)))!important; outline-offset:3px!important;
+}
+button:focus:not(:focus-visible),a:focus:not(:focus-visible),[role="button"]:focus:not(:focus-visible){ outline:none; }
+h1,h2,h3{ text-wrap:balance; }
+@media (pointer:coarse){ button,.btn,[role="button"]{ min-height:44px; } }
+@media (hover:hover) and (pointer:fine){
+  .card{ position:relative; }
+  .card::after{ content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    opacity:0; transition:opacity 240ms var(--ease-quick);
+    background:radial-gradient(340px circle at var(--mx,50%) var(--my,50%),
+      color-mix(in srgb, var(--accent-blue, var(--md-primary, var(--primary,#aac7ff))) 13%, transparent), transparent 60%); }
+  .card:hover::after{ opacity:1; }
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{ animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; }
+  .card::after{ display:none!important; }
+}
 </style>
 </head>
 <body>
@@ -917,5 +963,18 @@ h1,.header,header,.app-header{animation:md-drop .55s var(--ease-emph,cubic-bezie
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: rgba(255, 255, 255, 0.6); font-size: 14px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
         Made with ❤️ by Martin Pfeffer
     </footer>
+<script>/* cursor-sheen (gated, rAF-throttled, additiv) */
+(function(){try{
+  if(!matchMedia('(hover:hover) and (pointer:fine)').matches) return;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var sel='.card',el=null,x=0,y=0,q=false;
+  function f(){q=false;if(!el)return;var r=el.getBoundingClientRect();
+    el.style.setProperty('--mx',((x-r.left)/r.width*100)+'%');
+    el.style.setProperty('--my',((y-r.top)/r.height*100)+'%');}
+  document.addEventListener('pointermove',function(e){
+    var c=e.target.closest?e.target.closest(sel):null;el=c;x=e.clientX;y=e.clientY;
+    if(c&&!q){q=true;requestAnimationFrame(f);}
+  },{passive:true});
+}catch(_){}})();</script>
 </body>
 </html>
