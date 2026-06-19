@@ -14,6 +14,7 @@ import datetime
 import importlib.util
 import json
 import os
+import sqlite3
 import threading
 import time
 
@@ -191,6 +192,174 @@ def usage_analytics():
         return {"hourlyData": [], "peakHour": None}
 
 
+# ---- tank / fluid tracking (SQLite, self-calibrating) -----------------------
+# Each fog "on" is one discrete burst (~fixed fluid). We don't know the exact
+# ml-per-burst up front, so we learn it: every activation since the last refill
+# is counted; when the user refills and tells us how empty the tank was, the
+# finished cycle yields a sample (consumed / activations) that updates the
+# per-activation estimate via an EWMA. Live level is derived, never polled.
+TANK_DB = os.path.join(HERE, "fog-tank.db")
+TANK_DEFAULT_CAPACITY = 250.0          # ml — Katomi 500W class; editable in GUI
+TANK_SEED_ML_PER_ACT = TANK_DEFAULT_CAPACITY / 25.0   # ~10 ml until calibrated
+_CAL_ALPHA = 0.5                       # EWMA weight for a normal refill sample
+_CAL_ALPHA_EMPTY = 0.7                 # stronger weight when the tank ran empty
+_tank_lock = threading.Lock()
+_tank = None
+
+
+def _tank_conn():
+    global _tank
+    if _tank is None:
+        _tank = sqlite3.connect(TANK_DB, check_same_thread=False)
+        _tank.row_factory = sqlite3.Row
+    return _tank
+
+
+def init_tank_db():
+    with _tank_lock:
+        conn = _tank_conn()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tank (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                capacity_ml REAL NOT NULL DEFAULT 250,
+                level_at_refill_ml REAL NOT NULL DEFAULT 250,
+                activations_since_refill INTEGER NOT NULL DEFAULT 0,
+                ml_per_activation REAL NOT NULL DEFAULT 10,
+                calibrated INTEGER NOT NULL DEFAULT 0,
+                last_refill_at TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS refills (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts TEXT NOT NULL,
+                level_before_ml REAL,
+                remaining_ml REAL,
+                amount_added_ml REAL,
+                level_after_ml REAL,
+                activations_in_cycle INTEGER,
+                ml_per_act_sample REAL,
+                was_empty INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        if conn.execute("SELECT id FROM tank WHERE id = 1").fetchone() is None:
+            conn.execute(
+                "INSERT INTO tank (id, capacity_ml, level_at_refill_ml, "
+                "ml_per_activation) VALUES (1, ?, ?, ?)",
+                (TANK_DEFAULT_CAPACITY, TANK_DEFAULT_CAPACITY, TANK_SEED_ML_PER_ACT))
+        conn.commit()
+    print("💧 Tank SQLite DB ready")
+
+
+def _level_from_row(row):
+    lvl = row["level_at_refill_ml"] - row["activations_since_refill"] * row["ml_per_activation"]
+    return max(0.0, min(row["capacity_ml"], lvl))
+
+
+def tank_state():
+    with _tank_lock:
+        row = _tank_conn().execute("SELECT * FROM tank WHERE id = 1").fetchone()
+    cap = row["capacity_ml"]
+    level = _level_from_row(row)
+    mpa = row["ml_per_activation"]
+    return {
+        "capacity_ml": round(cap, 1),
+        "level_ml": round(level, 1),
+        "level_pct": round(level / cap * 100) if cap > 0 else 0,
+        "ml_per_activation": round(mpa, 2),
+        "activations_since_refill": row["activations_since_refill"],
+        "est_activations_remaining": int(level / mpa) if mpa > 0 else None,
+        "calibrated": bool(row["calibrated"]),
+        "last_refill_at": row["last_refill_at"],
+    }
+
+
+def tank_bump_activation():
+    """+1 burst on the current cycle (independent of the resettable config count)."""
+    try:
+        with _tank_lock:
+            conn = _tank_conn()
+            conn.execute("UPDATE tank SET activations_since_refill = "
+                         "activations_since_refill + 1 WHERE id = 1")
+            conn.commit()
+    except Exception as e:
+        print(f"❌ Tank activation bump failed: {e}")
+
+
+def tank_refill(full=False, amount_ml=None, remaining_ml=None, was_empty=False):
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    with _tank_lock:
+        conn = _tank_conn()
+        row = conn.execute("SELECT * FROM tank WHERE id = 1").fetchone()
+        cap = row["capacity_ml"]
+        level_at_refill = row["level_at_refill_ml"]
+        acts = row["activations_since_refill"]
+        old_mpa = row["ml_per_activation"]
+        calibrated = row["calibrated"]
+        level_before = _level_from_row(row)
+
+        # Ground-truth remaining fluid before topping up (user feedback).
+        if was_empty:
+            remaining = 0.0
+        elif remaining_ml is not None:
+            remaining = max(0.0, min(cap, float(remaining_ml)))
+        else:
+            remaining = level_before          # no info → trust the estimate
+
+        # Calibration sample from the cycle that just ended.
+        consumed = level_at_refill - remaining
+        sample = consumed / acts if acts > 0 and consumed > 0 else None
+        if sample is not None:
+            if not calibrated:
+                new_mpa = sample
+            else:
+                alpha = _CAL_ALPHA_EMPTY if was_empty else _CAL_ALPHA
+                new_mpa = alpha * sample + (1 - alpha) * old_mpa
+            new_cal = 1
+        else:
+            new_mpa, new_cal = old_mpa, calibrated
+
+        # New level after topping up.
+        if full or amount_ml is None:
+            level_after = cap
+        else:
+            level_after = max(0.0, min(cap, remaining + float(amount_ml)))
+        added = level_after - remaining
+
+        conn.execute(
+            "UPDATE tank SET level_at_refill_ml = ?, activations_since_refill = 0, "
+            "ml_per_activation = ?, calibrated = ?, last_refill_at = ? WHERE id = 1",
+            (level_after, new_mpa, new_cal, now))
+        conn.execute(
+            "INSERT INTO refills (ts, level_before_ml, remaining_ml, amount_added_ml, "
+            "level_after_ml, activations_in_cycle, ml_per_act_sample, was_empty) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (now, round(level_before, 1), round(remaining, 1), round(added, 1),
+             round(level_after, 1), acts,
+             round(sample, 3) if sample is not None else None, 1 if was_empty else 0))
+        conn.commit()
+    return tank_state()
+
+
+def tank_set_capacity(new_cap):
+    new_cap = max(50.0, min(5000.0, float(new_cap)))
+    with _tank_lock:
+        conn = _tank_conn()
+        row = conn.execute("SELECT * FROM tank WHERE id = 1").fetchone()
+        level = min(_level_from_row(row), new_cap)
+        conn.execute("UPDATE tank SET capacity_ml = ?, level_at_refill_ml = ?, "
+                     "activations_since_refill = 0 WHERE id = 1", (new_cap, level))
+        conn.commit()
+    return tank_state()
+
+
+def tank_history(limit=10):
+    with _tank_lock:
+        rows = _tank_conn().execute(
+            "SELECT * FROM refills ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
 # ---- core command -----------------------------------------------------------
 def execute_command(command, kind="manual"):
     if command not in ("on", "off"):
@@ -203,6 +372,7 @@ def execute_command(command, kind="manual"):
             datetime.timezone.utc).isoformat()
         config["activationCount"] += 1
         log_activation(kind)
+        tank_bump_activation()
     else:
         config["fogActive"] = False
     save_config()
@@ -380,12 +550,71 @@ def analytics_usage():
                        details=str(e)), 500
 
 
+@app.route("/api/tank")
+def tank_get():
+    try:
+        return jsonify(success=True, **tank_state())
+    except Exception as e:
+        return jsonify(success=False, error="Failed to read tank state",
+                       details=str(e)), 500
+
+
+@app.route("/api/tank/refill", methods=["POST"])
+def tank_refill_route():
+    data = request.get_json(silent=True) or {}
+
+    def _num(key):
+        v = data.get(key)
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    try:
+        state = tank_refill(full=bool(data.get("full")),
+                            amount_ml=_num("amount_ml"),
+                            remaining_ml=_num("remaining_ml"),
+                            was_empty=bool(data.get("was_empty")))
+        return jsonify(success=True, message="Refill recorded", **state)
+    except Exception as e:
+        return jsonify(success=False, error="Failed to record refill",
+                       details=str(e)), 500
+
+
+@app.route("/api/tank/config", methods=["POST"])
+def tank_config_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        cap = float(data.get("capacity_ml"))
+    except (TypeError, ValueError):
+        return jsonify(success=False, error="capacity_ml (number) required"), 400
+    if not (50 <= cap <= 5000):
+        return jsonify(success=False,
+                       error="capacity_ml must be between 50 and 5000 ml"), 400
+    try:
+        return jsonify(success=True, message="Capacity updated",
+                       **tank_set_capacity(cap))
+    except Exception as e:
+        return jsonify(success=False, error="Failed to set capacity",
+                       details=str(e)), 500
+
+
+@app.route("/api/tank/history")
+def tank_history_route():
+    try:
+        return jsonify(success=True, refills=tank_history())
+    except Exception as e:
+        return jsonify(success=False, error="Failed to read history",
+                       details=str(e)), 500
+
+
 @app.route("/<path:p>")
 def static_files(p):
     return send_from_directory(os.path.join(HERE, "public"), p)
 
 
 init_db()
+init_tank_db()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=PORT, threaded=True)

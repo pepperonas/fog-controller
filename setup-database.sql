@@ -30,3 +30,11 @@ CREATE TABLE IF NOT EXISTS fog_activations (
 -- ('manual', '2025-01-09 11:30:00');
 
 SELECT 'Database setup completed successfully!' as message;
+-- ---------------------------------------------------------------------------
+-- NOTE: Fluid/tank tracking (Füllstand) lives in a SEPARATE, self-managed
+-- SQLite database `fog-tank.db` (created automatically by server.py on start,
+-- see init_tank_db()). It holds the tank state + refill history and learns the
+-- ml-per-activation consumption from each refill. It is NOT part of MariaDB and
+-- needs no manual setup. This MariaDB `fog_activations` table still drives the
+-- 24h usage chart.
+-- ---------------------------------------------------------------------------

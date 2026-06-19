@@ -7,3 +7,6 @@ fog-config.json
 
 venv/
 __pycache__/
+
+# SQLite fluid/tank tracking DB (runtime state)
+fog-tank.db

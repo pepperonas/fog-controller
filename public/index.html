@@ -564,6 +564,60 @@ h1,h2,h3{ text-wrap:balance; }
   *,*::before,*::after{ animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; }
   .card::after{ display:none!important; }
 }
+
+/* ---- Tank / Füllstand ---- */
+.tank-card .tank-layout{ display:flex; gap:var(--spacing-6); align-items:center; flex-wrap:wrap; }
+.tank-gauge{ flex:0 0 auto; width:108px; }
+.tank-gauge svg{ display:block; width:100%; height:auto; }
+.tank-liquid{ transition:y .8s var(--ease-emph), height .8s var(--ease-emph), fill .8s var(--ease-emph); }
+.tank-wave{ transition:transform .8s var(--ease-emph); }
+.tank-meta{ flex:1 1 180px; min-width:180px; display:flex; flex-direction:column; gap:var(--spacing-2); }
+.tank-pct{ font-size:2.4rem; font-weight:800; line-height:1; color:var(--text-primary); }
+.tank-pct small{ font-size:1rem; font-weight:600; color:var(--text-secondary); margin-left:.35rem; }
+.tank-sub{ color:var(--text-secondary); font-size:.95rem; }
+.tank-sub b{ color:var(--text-primary); font-weight:700; }
+.badge{ display:inline-block; align-self:flex-start; font-size:.72rem; font-weight:700; letter-spacing:.02em;
+  padding:.22rem .6rem; border-radius:999px; background:color-mix(in srgb,var(--accent-orange) 20%,transparent);
+  color:var(--accent-orange); border:1px solid color-mix(in srgb,var(--accent-orange) 40%,transparent); }
+.badge.ok{ background:color-mix(in srgb,var(--accent-green) 18%,transparent); color:var(--accent-green);
+  border-color:color-mix(in srgb,var(--accent-green) 38%,transparent); }
+.tank-actions{ display:flex; gap:var(--spacing-2); flex-wrap:wrap; margin-top:var(--spacing-3); }
+.btn-tonal{ background:var(--surface-high); color:var(--text-primary); border:1px solid var(--outline); }
+.btn-tonal:hover{ background:var(--surface-highest); }
+
+/* ---- Dialog ---- */
+.dialog-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.55); backdrop-filter:blur(3px);
+  display:flex; align-items:center; justify-content:center; padding:var(--spacing-4); z-index:1000;
+  opacity:0; pointer-events:none; transition:opacity .22s var(--ease-emph); }
+.dialog-backdrop.show{ opacity:1; pointer-events:auto; }
+.dialog{ background:var(--card-background); border:1px solid var(--outline); border-radius:var(--radius-xl);
+  box-shadow:var(--shadow-lg); width:min(420px,100%); padding:var(--spacing-6);
+  transform:translateY(16px) scale(.97); transition:transform .26s var(--ease-spring); }
+.dialog-backdrop.show .dialog{ transform:none; }
+.dialog h3{ margin-bottom:var(--spacing-2); }
+.dialog p.hint{ color:var(--text-secondary); font-size:.9rem; margin-bottom:var(--spacing-4); }
+.field{ margin-bottom:var(--spacing-4); }
+.field label{ display:block; font-weight:600; margin-bottom:var(--spacing-2); color:var(--text-primary); }
+.field input[type=number]{ width:100%; padding:var(--spacing-3); border-radius:var(--radius);
+  border:1px solid var(--outline); background:var(--background-darker); color:var(--text-primary); font-size:1rem; }
+.seg{ display:flex; gap:var(--spacing-2); flex-wrap:wrap; }
+.seg button{ flex:1 1 0; min-width:96px; padding:var(--spacing-2) var(--spacing-3); border-radius:var(--radius);
+  border:1px solid var(--outline); background:var(--background-darker); color:var(--text-secondary);
+  font-weight:600; cursor:pointer; transition:all .18s var(--ease-emph); }
+.seg button.sel{ background:color-mix(in srgb,var(--accent-blue) 22%,transparent); color:var(--text-primary);
+  border-color:var(--accent-blue); }
+.dialog-disclosure{ margin-top:var(--spacing-2); }
+.dialog-disclosure summary{ cursor:pointer; color:var(--accent-blue); font-weight:600; font-size:.9rem;
+  margin-bottom:var(--spacing-3); }
+.dialog-row{ display:flex; gap:var(--spacing-3); justify-content:flex-end; margin-top:var(--spacing-6); }
+
+/* ---- Chart (SVG) ---- */
+#usage-chart{ display:block; }
+.chart-svg{ width:100%; height:auto; display:block; font-family:var(--font-family); }
+.chart-svg .grid-line{ stroke:var(--outline); stroke-width:1; opacity:.4; }
+.chart-svg .axis-label{ fill:var(--text-secondary); font-size:9px; }
+.chart-svg .bar{ transition:height .35s var(--ease-emph), y .35s var(--ease-emph); cursor:default; }
+.chart-svg .bar:hover{ filter:brightness(1.15); }
 </style>
 </head>
 <body>
@@ -635,10 +689,49 @@ h1,h2,h3{ text-wrap:balance; }
             </div>
         </div>
 
+        <!-- Tank / Füllstand -->
+        <div class="card tank-card">
+            <h2>💧 Tankfüllstand</h2>
+            <div class="tank-layout">
+                <div class="tank-gauge">
+                    <svg viewBox="0 0 100 150" role="img" aria-label="Tankfüllstand">
+                        <defs>
+                            <clipPath id="tank-clip">
+                                <rect x="14" y="8" width="72" height="134" rx="16"></rect>
+                            </clipPath>
+                        </defs>
+                        <!-- empty tank body -->
+                        <rect x="14" y="8" width="72" height="134" rx="16"
+                              fill="var(--background-darker)" stroke="var(--outline)" stroke-width="2.5"></rect>
+                        <!-- liquid (clipped to body); y/height set by JS -->
+                        <g clip-path="url(#tank-clip)">
+                            <rect id="tank-liquid" class="tank-liquid" x="14" y="142" width="72" height="0"
+                                  fill="var(--accent-green)"></rect>
+                            <path id="tank-wave" class="tank-wave" fill="var(--accent-green)" opacity="0.55"
+                                  d="M0 6 q 12 -8 24 0 t 24 0 t 24 0 t 24 0 t 24 0 V 30 H0 Z"
+                                  transform="translate(0,142)"></path>
+                        </g>
+                        <!-- gloss -->
+                        <rect x="22" y="16" width="10" height="118" rx="5" fill="#ffffff" opacity="0.05"></rect>
+                    </svg>
+                </div>
+                <div class="tank-meta">
+                    <div class="tank-pct"><span id="tank-pct">–</span><small id="tank-ml"></small></div>
+                    <div class="tank-sub">Reicht noch für ~<b id="tank-remaining">–</b> Aktivierungen</div>
+                    <div class="tank-sub">Ø <b id="tank-rate">–</b> ml/Aktivierung · <span id="tank-cycle">0</span> seit Nachfüllen</div>
+                    <span class="badge" id="tank-badge" style="display:none;">noch nicht kalibriert</span>
+                    <div class="tank-actions">
+                        <button class="btn btn-primary" id="tank-refill-btn" style="min-height:40px;">💧 Nachgefüllt</button>
+                        <button class="btn btn-tonal" id="tank-capacity-btn" style="min-height:40px;">⚙︎ Tankgröße</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Usage Chart -->
         <div class="card">
-            <h2>Nutzungsverlauf</h2>
-            <div id="usage-chart" style="height: 300px; background: var(--background-darker); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">
+            <h2>Nutzungsverlauf <span style="font-size:.8rem;font-weight:500;color:var(--text-secondary);">(24 h)</span></h2>
+            <div id="usage-chart" style="min-height: 240px; background: var(--background-darker); border-radius: var(--radius); padding: var(--spacing-4); color: var(--text-secondary);">
                 Chart wird geladen...
             </div>
         </div>
@@ -654,6 +747,51 @@ h1,h2,h3{ text-wrap:balance; }
         </div>
     </div>
 
+    <!-- Refill dialog -->
+    <div class="dialog-backdrop" id="refill-dialog">
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="refill-title">
+            <h3 id="refill-title">💧 Tank nachgefüllt</h3>
+            <p class="hint">Wie war der Tank vor dem Nachfüllen? Deine Angabe verbessert die Verbrauchsschätzung.</p>
+            <div class="field">
+                <div class="seg" id="refill-empty-seg">
+                    <button type="button" data-empty="1" class="sel">Tank war leer</button>
+                    <button type="button" data-empty="0">Restmenge angeben</button>
+                </div>
+            </div>
+            <div class="field" id="refill-remaining-field" style="display:none;">
+                <label for="refill-remaining">Restmenge (ml)</label>
+                <input type="number" id="refill-remaining" min="0" step="10" placeholder="z. B. 40">
+            </div>
+            <details class="dialog-disclosure">
+                <summary>Nicht ganz voll aufgefüllt?</summary>
+                <div class="field" style="margin-bottom:0;">
+                    <label for="refill-amount">Zugegebene Menge (ml) — leer = bis voll</label>
+                    <input type="number" id="refill-amount" min="0" step="10" placeholder="bis voll">
+                </div>
+            </details>
+            <div class="dialog-row">
+                <button class="btn btn-tonal" id="refill-cancel" style="min-height:40px;">Abbrechen</button>
+                <button class="btn btn-primary" id="refill-confirm" style="min-height:40px;">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Capacity dialog -->
+    <div class="dialog-backdrop" id="capacity-dialog">
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="cap-title">
+            <h3 id="cap-title">⚙︎ Tankgröße</h3>
+            <p class="hint">Fassungsvermögen des Tanks. Der Verbrauch pro Aktivierung wird automatisch kalibriert.</p>
+            <div class="field" style="margin-bottom:0;">
+                <label for="capacity-input">Kapazität (ml)</label>
+                <input type="number" id="capacity-input" min="50" max="5000" step="10" placeholder="250">
+            </div>
+            <div class="dialog-row">
+                <button class="btn btn-tonal" id="capacity-cancel" style="min-height:40px;">Abbrechen</button>
+                <button class="btn btn-primary" id="capacity-confirm" style="min-height:40px;">Speichern</button>
+            </div>
+        </div>
+    </div>
+
     <div class="message" id="message"></div>
 
     <script>
@@ -663,9 +801,11 @@ h1,h2,h3{ text-wrap:balance; }
                 this.attachEventListeners();
                 this.loadStatus();
                 this.loadAutoFogStatus();
+                this.loadTank();
                 // Auto-refresh status every 5 seconds
                 setInterval(() => this.loadStatus(), 5000);
                 setInterval(() => this.loadAutoFogStatus(), 10000);
+                setInterval(() => this.loadTank(), 5000);
             }
 
             initializeElements() {
@@ -682,8 +822,31 @@ h1,h2,h3{ text-wrap:balance; }
                     autoFogToggle: document.getElementById('auto-fog-toggle'),
                     autoFogStatus: document.getElementById('auto-fog-status'),
                     usageChart: document.getElementById('usage-chart'),
-                    message: document.getElementById('message')
+                    message: document.getElementById('message'),
+                    // tank
+                    tankLiquid: document.getElementById('tank-liquid'),
+                    tankWave: document.getElementById('tank-wave'),
+                    tankPct: document.getElementById('tank-pct'),
+                    tankMl: document.getElementById('tank-ml'),
+                    tankRemaining: document.getElementById('tank-remaining'),
+                    tankRate: document.getElementById('tank-rate'),
+                    tankCycle: document.getElementById('tank-cycle'),
+                    tankBadge: document.getElementById('tank-badge'),
+                    tankRefillBtn: document.getElementById('tank-refill-btn'),
+                    tankCapacityBtn: document.getElementById('tank-capacity-btn'),
+                    refillDialog: document.getElementById('refill-dialog'),
+                    refillEmptySeg: document.getElementById('refill-empty-seg'),
+                    refillRemainingField: document.getElementById('refill-remaining-field'),
+                    refillRemaining: document.getElementById('refill-remaining'),
+                    refillAmount: document.getElementById('refill-amount'),
+                    refillCancel: document.getElementById('refill-cancel'),
+                    refillConfirm: document.getElementById('refill-confirm'),
+                    capacityDialog: document.getElementById('capacity-dialog'),
+                    capacityInput: document.getElementById('capacity-input'),
+                    capacityCancel: document.getElementById('capacity-cancel'),
+                    capacityConfirm: document.getElementById('capacity-confirm')
                 };
+                this._capacity = 250;     // last known, for the capacity dialog default
             }
 
             attachEventListeners() {
@@ -696,6 +859,37 @@ h1,h2,h3{ text-wrap:balance; }
 
                 // Auto-fog controls
                 this.elements.autoFogToggle.addEventListener('click', () => this.toggleAutoFog());
+
+                // Tank: open dialogs
+                this.elements.tankRefillBtn.addEventListener('click', () => this.openRefill());
+                this.elements.tankCapacityBtn.addEventListener('click', () => this.openCapacity());
+
+                // Refill dialog
+                this.elements.refillEmptySeg.addEventListener('click', (e) => {
+                    const btn = e.target.closest('button[data-empty]');
+                    if (!btn) return;
+                    this.elements.refillEmptySeg.querySelectorAll('button').forEach(b => b.classList.remove('sel'));
+                    btn.classList.add('sel');
+                    const showRemaining = btn.dataset.empty === '0';
+                    this.elements.refillRemainingField.style.display = showRemaining ? '' : 'none';
+                });
+                this.elements.refillCancel.addEventListener('click', () => this.closeDialog(this.elements.refillDialog));
+                this.elements.refillConfirm.addEventListener('click', () => this.submitRefill());
+
+                // Capacity dialog
+                this.elements.capacityCancel.addEventListener('click', () => this.closeDialog(this.elements.capacityDialog));
+                this.elements.capacityConfirm.addEventListener('click', () => this.submitCapacity());
+
+                // Backdrop click + Esc close any dialog
+                [this.elements.refillDialog, this.elements.capacityDialog].forEach(d => {
+                    d.addEventListener('click', (e) => { if (e.target === d) this.closeDialog(d); });
+                });
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        this.closeDialog(this.elements.refillDialog);
+                        this.closeDialog(this.elements.capacityDialog);
+                    }
+                });
             }
 
             async loadStatus() {
@@ -900,6 +1094,117 @@ h1,h2,h3{ text-wrap:balance; }
                 }
             }
 
+            async loadTank() {
+                try {
+                    const response = await fetch('api/tank');
+                    const data = await response.json();
+                    if (data.success) this.renderTank(data);
+                } catch (error) {
+                    console.error('Failed to load tank:', error);
+                }
+            }
+
+            renderTank(s) {
+                this._capacity = s.capacity_ml;
+                const pct = Math.max(0, Math.min(100, s.level_pct));
+                const fullH = 134, bottomY = 142;
+                const h = fullH * pct / 100;
+                const y = bottomY - h;
+                const color = pct > 50 ? 'var(--accent-green)'
+                            : pct >= 20 ? 'var(--accent-orange)' : 'var(--accent-red)';
+                this.elements.tankLiquid.setAttribute('height', h.toFixed(1));
+                this.elements.tankLiquid.setAttribute('y', y.toFixed(1));
+                this.elements.tankLiquid.setAttribute('fill', color);
+                this.elements.tankWave.setAttribute('transform', `translate(0, ${(y - 6).toFixed(1)})`);
+                this.elements.tankWave.setAttribute('fill', color);
+                this.elements.tankWave.style.display = (pct > 1 && pct < 99) ? '' : 'none';
+
+                this.elements.tankPct.textContent = pct + '%';
+                this.elements.tankMl.textContent = `~${Math.round(s.level_ml)} / ${Math.round(s.capacity_ml)} ml`;
+                this.elements.tankRemaining.textContent =
+                    (s.est_activations_remaining == null ? '–' : s.est_activations_remaining);
+                this.elements.tankRate.textContent = s.ml_per_activation;
+                this.elements.tankCycle.textContent = s.activations_since_refill;
+                this.elements.tankBadge.style.display = s.calibrated ? 'none' : '';
+            }
+
+            openDialog(d) { d.classList.add('show'); }
+            closeDialog(d) { d.classList.remove('show'); }
+
+            openRefill() {
+                // reset to default: "Tank war leer"
+                this.elements.refillEmptySeg.querySelectorAll('button').forEach((b, i) =>
+                    b.classList.toggle('sel', b.dataset.empty === '1'));
+                this.elements.refillRemainingField.style.display = 'none';
+                this.elements.refillRemaining.value = '';
+                this.elements.refillAmount.value = '';
+                this.openDialog(this.elements.refillDialog);
+            }
+
+            async submitRefill() {
+                const emptyBtn = this.elements.refillEmptySeg.querySelector('button.sel');
+                const wasEmpty = emptyBtn && emptyBtn.dataset.empty === '1';
+                const body = {};
+                if (wasEmpty) {
+                    body.was_empty = true;
+                } else {
+                    const r = parseFloat(this.elements.refillRemaining.value);
+                    if (!isNaN(r) && r >= 0) body.remaining_ml = r;
+                }
+                const amt = parseFloat(this.elements.refillAmount.value);
+                if (!isNaN(amt) && amt > 0) body.amount_ml = amt; else body.full = true;
+
+                try {
+                    const response = await fetch('api/tank/refill', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body)
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        this.renderTank(result);
+                        this.closeDialog(this.elements.refillDialog);
+                        this.showMessage(result.calibrated
+                            ? `💧 Nachgefüllt — Verbrauch kalibriert (${result.ml_per_activation} ml/Aktivierung)`
+                            : '💧 Nachgefüllt', 'success');
+                    } else {
+                        this.showMessage(result.error || 'Speichern fehlgeschlagen', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage('Verbindungsfehler', 'error');
+                }
+            }
+
+            openCapacity() {
+                this.elements.capacityInput.value = Math.round(this._capacity);
+                this.openDialog(this.elements.capacityDialog);
+            }
+
+            async submitCapacity() {
+                const cap = parseFloat(this.elements.capacityInput.value);
+                if (isNaN(cap) || cap < 50 || cap > 5000) {
+                    this.showMessage('Kapazität muss zwischen 50 und 5000 ml liegen', 'error');
+                    return;
+                }
+                try {
+                    const response = await fetch('api/tank/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ capacity_ml: cap })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        this.renderTank(result);
+                        this.closeDialog(this.elements.capacityDialog);
+                        this.showMessage(`Tankgröße auf ${Math.round(result.capacity_ml)} ml gesetzt`, 'success');
+                    } else {
+                        this.showMessage(result.error || 'Speichern fehlgeschlagen', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage('Verbindungsfehler', 'error');
+                }
+            }
+
             async loadUsageChart() {
                 try {
                     const response = await fetch('api/analytics/usage');
@@ -916,36 +1221,59 @@ h1,h2,h3{ text-wrap:balance; }
                 }
             }
 
+            _niceCeil(v) {
+                const pow = Math.pow(10, Math.floor(Math.log10(v)));
+                const n = v / pow;
+                const nice = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
+                return nice * pow;
+            }
+
             renderChart(hourlyData) {
-                // Simple ASCII-style chart
-                const maxCount = Math.max(...hourlyData.map(d => d.count));
-                const chartHeight = 200;
-                
-                let chartHtml = '<div style="display: flex; align-items: end; height: 200px; gap: 2px; padding: 20px;">';
-                
-                hourlyData.forEach(data => {
-                    const height = maxCount > 0 ? (data.count / maxCount * chartHeight) : 0;
-                    const color = height > chartHeight * 0.7 ? 'var(--accent-red)' : 
-                                 height > chartHeight * 0.4 ? 'var(--accent-orange)' : 
-                                 'var(--accent-blue)';
-                    
-                    chartHtml += `
-                        <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
-                            <div style="
-                                width: 100%; 
-                                height: ${height}px; 
-                                background: ${color}; 
-                                border-radius: 2px 2px 0 0;
-                                margin-bottom: 5px;
-                                transition: all 0.3s ease;
-                            " title="${data.hour}:00 - ${data.count} Aktivierungen"></div>
-                            <div style="font-size: 0.7em; color: var(--text-secondary);">${data.hour}</div>
-                        </div>
-                    `;
+                const total = hourlyData.reduce((a, d) => a + d.count, 0);
+                if (total === 0) {
+                    this.elements.usageChart.innerHTML =
+                        '<div style="text-align:center;padding:96px 0;color:var(--text-secondary);">Noch keine Aktivierungen in den letzten 24 h</div>';
+                    return;
+                }
+
+                const W = 480, H = 220, padL = 28, padR = 8, padT = 12, padB = 22;
+                const plotW = W - padL - padR, plotH = H - padT - padB;
+                const x0 = padL, yBase = padT + plotH;
+                const bandW = plotW / 24, barW = bandW * 0.66;
+                const rawMax = Math.max(1, ...hourlyData.map(d => d.count));
+                const niceMax = this._niceCeil(rawMax);
+
+                const ticks = [0, niceMax];
+                if (niceMax % 2 === 0 && niceMax >= 2) ticks.splice(1, 0, niceMax / 2);
+
+                let grid = '', ylabels = '';
+                ticks.forEach(t => {
+                    const y = yBase - (t / niceMax) * plotH;
+                    grid += `<line class="grid-line" x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}"></line>`;
+                    ylabels += `<text class="axis-label" x="${padL - 5}" y="${(y + 3).toFixed(1)}" text-anchor="end">${t}</text>`;
                 });
-                
-                chartHtml += '</div>';
-                this.elements.usageChart.innerHTML = chartHtml;
+
+                let bars = '';
+                hourlyData.forEach((d, i) => {
+                    const h = (d.count / niceMax) * plotH;
+                    const x = x0 + i * bandW + (bandW - barW) / 2;
+                    const y = yBase - h;
+                    const frac = d.count / niceMax;
+                    const color = frac > 0.7 ? 'var(--accent-red)'
+                                : frac > 0.4 ? 'var(--accent-orange)' : 'var(--accent-blue)';
+                    bars += `<rect class="bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="2" fill="${color}"><title>${d.hour}:00 — ${d.count} Aktivierungen</title></rect>`;
+                });
+
+                let xlabels = '';
+                [0, 6, 12, 18, 23].forEach(hr => {
+                    const x = x0 + hr * bandW + bandW / 2;
+                    xlabels += `<text class="axis-label" x="${x.toFixed(1)}" y="${(yBase + 14).toFixed(1)}" text-anchor="middle">${hr}h</text>`;
+                });
+
+                this.elements.usageChart.innerHTML =
+                    `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Aktivierungen pro Stunde">`
+                    + grid + ylabels + bars + xlabels
+                    + `<line class="grid-line" x1="${padL}" y1="${yBase}" x2="${W - padR}" y2="${yBase}" style="opacity:.7"></line></svg>`;
             }
 
             showMessage(text, type = 'info') {
