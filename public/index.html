@@ -601,9 +601,11 @@ h1,h2,h3{ text-wrap:balance; }
                 <label for="auto-fog-interval" style="font-weight: 500; color: var(--text-primary);">Intervall:</label>
                 <select id="auto-fog-interval" style="padding: var(--spacing-2) var(--spacing-3); border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.2); background: var(--background-darker); color: var(--text-primary); font-size: 1rem;">
                     <option value="0">Deaktiviert</option>
-                    <option value="2">Alle 2 Minuten</option>
                     <option value="5">Alle 5 Minuten</option>
-                    <option value="10">Alle 10 Minuten</option>
+                    <option value="15">Alle 15 Minuten</option>
+                    <option value="30">Alle 30 Minuten</option>
+                    <option value="60">Alle 60 Minuten</option>
+                    <option value="120">Alle 120 Minuten</option>
                 </select>
                 <button class="btn btn-primary" id="auto-fog-toggle" style="min-height: 40px; padding: var(--spacing-2) var(--spacing-4);">
                     <span>Aktivieren</span>
@@ -846,7 +848,7 @@ h1,h2,h3{ text-wrap:balance; }
                     const interval = parseInt(this.elements.autoFogInterval.value);
                     
                     // Validate interval value
-                    if (isNaN(interval) || ![0, 2, 5, 10].includes(interval)) {
+                    if (isNaN(interval) || ![0, 5, 15, 30, 60, 120].includes(interval)) {
                         this.showMessage('Ungültiges Intervall', 'error');
                         return;
                     }

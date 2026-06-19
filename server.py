@@ -348,9 +348,9 @@ def auto_enable():
         interval = int(data.get("interval"))
     except (TypeError, ValueError):
         interval = None
-    if interval not in (2, 5, 10):
+    if interval not in (5, 15, 30, 60, 120):
         return jsonify(success=False,
-                       error="Invalid interval. Must be 2, 5, or 10 minutes"), 400
+                       error="Invalid interval. Must be 5, 15, 30, 60, or 120 minutes"), 400
     try:
         start_auto_fog(interval)
         return jsonify(success=True,
