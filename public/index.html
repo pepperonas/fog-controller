@@ -697,7 +697,7 @@ h1,h2,h3{ text-wrap:balance; }
 
             async loadStatus() {
                 try {
-                    const response = await fetch('/api/status');
+                    const response = await fetch('api/status');
                     const data = await response.json();
                     
                     // Update UI based on status
@@ -750,7 +750,7 @@ h1,h2,h3{ text-wrap:balance; }
 
             async toggleFog() {
                 try {
-                    const response = await fetch('/api/fog/toggle', {
+                    const response = await fetch('api/fog/toggle', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -771,7 +771,7 @@ h1,h2,h3{ text-wrap:balance; }
 
             async turnOn() {
                 try {
-                    const response = await fetch('/api/fog/on', {
+                    const response = await fetch('api/fog/on', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -791,7 +791,7 @@ h1,h2,h3{ text-wrap:balance; }
 
             async turnOff() {
                 try {
-                    const response = await fetch('/api/fog/off', {
+                    const response = await fetch('api/fog/off', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' }
                     });
@@ -811,7 +811,7 @@ h1,h2,h3{ text-wrap:balance; }
 
             async loadAutoFogStatus() {
                 try {
-                    const response = await fetch('/api/auto-fog/status');
+                    const response = await fetch('api/auto-fog/status');
                     const data = await response.json();
                     
                     if (data.active) {
@@ -852,7 +852,7 @@ h1,h2,h3{ text-wrap:balance; }
                     
                     if (interval === 0) {
                         // Disable auto-fog
-                        const response = await fetch('/api/auto-fog/disable', {
+                        const response = await fetch('api/auto-fog/disable', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' }
                         });
@@ -870,7 +870,7 @@ h1,h2,h3{ text-wrap:balance; }
                         }
                     } else {
                         // Enable auto-fog
-                        const response = await fetch('/api/auto-fog/enable', {
+                        const response = await fetch('api/auto-fog/enable', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ interval: interval })
@@ -899,7 +899,7 @@ h1,h2,h3{ text-wrap:balance; }
 
             async loadUsageChart() {
                 try {
-                    const response = await fetch('/api/analytics/usage');
+                    const response = await fetch('api/analytics/usage');
                     const data = await response.json();
                     
                     if (data.success && data.hourlyData) {
