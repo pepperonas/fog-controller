@@ -282,7 +282,7 @@
             border: none;
             border-radius: var(--radius);
             font-size: 1rem;
-            font-weight: 500;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
             text-decoration: none;
@@ -293,26 +293,30 @@
             text-align: center;
             min-height: 60px;
             width: 100%;
+            letter-spacing: 0.01em;
         }
 
+        /* MD3: dark "on-container" text on the light, vibrant accent fills → high contrast */
         .btn-primary {
             background-color: var(--accent-blue);
-            color: white;
+            color: var(--on-primary);          /* #0a285a — deep navy on light blue */
+            font-weight: 700;
         }
 
         .btn-primary:hover {
-            background-color: #5a7a9a;
+            background-color: #9db5ff;          /* slightly deeper, keeps dark text readable */
             transform: translateY(-1px);
             box-shadow: var(--shadow);
         }
 
         .btn-danger {
             background-color: var(--accent-red);
-            color: white;
+            color: #5c0a06;                     /* MD3 on-error tone — dark red on salmon */
+            font-weight: 700;
         }
 
         .btn-danger:hover {
-            background-color: #d04f50;
+            background-color: #ff9c92;
             transform: translateY(-1px);
             box-shadow: var(--shadow);
         }
