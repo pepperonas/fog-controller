@@ -10,10 +10,17 @@
 
 <div align="center">
 
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
-![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?logo=python&logoColor=white)
-![Flask](https://img.shields.io/badge/Flask-2.x-000000.svg?logo=flask&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi-C51A4A.svg?logo=raspberrypi&logoColor=white)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![Flask](https://img.shields.io/badge/Flask-2.x-000000.svg?logo=flask&logoColor=white)](https://flask.palletsprojects.com/)
+[![SQLite](https://img.shields.io/badge/SQLite-tank%20DB-003B57.svg?logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![MariaDB](https://img.shields.io/badge/MariaDB-analytics-003545.svg?logo=mariadb&logoColor=white)](https://mariadb.org/)
+[![RF433](https://img.shields.io/badge/RF433-GPIO%2017-brightgreen.svg)](https://github.com/pepperonas/fog-controller)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi-C51A4A.svg?logo=raspberrypi&logoColor=white)](https://www.raspberrypi.com/)
+[![systemd](https://img.shields.io/badge/Process-systemd-informational.svg)](https://systemd.io/)
+[![Tests](https://img.shields.io/badge/Tests-62%20passing-brightgreen.svg)](tests/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/pepperonas/fog-controller/pulls)
+[![Made with ❤️](https://img.shields.io/badge/Made%20with%20%E2%9D%A4%EF%B8%8F%20by-Martin%20Pfeffer-ff69b4.svg)](https://celox.io)
 
 RF433 fog machine controller for Raspberry Pi with a modern web interface, auto-fog scheduling, self-calibrating tank fill-level tracking, and usage analytics.
 
@@ -121,6 +128,32 @@ in `fog-tank.db` (SQLite, `tank` + `refills` tables); MariaDB is untouched.
 - **Databases** — MariaDB via PyMySQL (usage analytics, optional) · SQLite (tank/fill-level, auto-created)
 - **Hardware** — RF433 transmitter on GPIO 17, RPi.GPIO (in-process, no sudo)
 - **Process Manager** — systemd (`fog-controller.service`)
+
+## Tests
+
+Pure-logic unit tests live in `tests/test_logic.py` (62 tests). They cover:
+
+- **`_level_from_row`** — tank level calculation with edge cases (clamping to 0 / capacity)
+- **EWMA calibration** — α=0.5 normal / α=0.7 empty-tank, first-sample override, convergence
+- **Calibration sample** — `consumed / activations`, zero-activations / zero-consumption guards
+- **Level percentage** — `level_ml / capacity × 100`, zero-capacity guard
+- **Estimated activations remaining** — `int(level / mpa)`, zero-mpa guard
+- **Capacity clamping** — `[50, 5000]` ml bounds
+- **Refill logic** — full vs. partial fill, `remaining_ml` clamping
+- **RF code constants** — ON `4543756` / OFF `4543792`, 24-bit range, hex representations
+- **Auto-fog interval validation** — valid set `{5,15,30,60,120}`, invalid inputs
+- **Hex-code validation** — `/api/fog/custom` input guard
+- **SQLite schema** (in-memory) — bump/reset activation counter, refill log, history order
+
+No GPIO, no real database, no network — all tests run on any platform.
+
+```bash
+# Install dev dependency
+pip install -r requirements-dev.txt
+
+# Run
+python3 -m pytest tests/ -v
+```
 
 ## Author
 
