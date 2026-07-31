@@ -3,7 +3,7 @@
 > **⚡ Update 2026-06 — Tank-Füllstand, Stack & UI**
 >
 > - **Tank / Füllstand (neu):** Vertikale Tankanzeige mit **selbstlernender Verbrauchsschätzung**. Jede Aktivierung ist ein diskreter Fog-Burst; das System zählt die Bursts seit dem letzten Nachfüllen und kalibriert aus deinem Refill-Feedback (Tank war leer / Restmenge) den echten **ml-pro-Aktivierung**-Wert (EWMA). Der Live-Füllstand wird daraus berechnet. Persistenz in einer **eigenen SQLite-DB** (`fog-tank.db`) — getrennt von MariaDB, keine zusätzlichen Dependencies. Nachfüllen & Tankgröße direkt in der GUI.
-> - **Backend:** Python/**Flask** (migriert von Node/Express). RF433-Bit-Bang (`fog-controller.py`, RPi.GPIO, GPIO 17) läuft **in-process als `pi`** (kein sudo/Subprozess), Usage-Logging via **PyMySQL** (MariaDB), Auto-Fog im Hintergrund-Thread. **systemd** `fog-controller`. ~35 MB. Sicherheit: Fog startet nie automatisch.
+> - **Backend:** Python/**Flask** (migriert von Node/Express). RF433-Bit-Bang (`fog-controller.py`, **rpi-lgpio**/RPi.GPIO-API, GPIO 17; Pi 5-kompatibel) läuft **in-process als `pi`** (kein sudo/Subprozess), Usage-Logging via **PyMySQL** (MariaDB), Auto-Fog im Hintergrund-Thread. **systemd** `fog-controller`. ~35 MB. Sicherheit: Fog startet nie automatisch.
 > - **UI:** **Material Design 3 Expressive** + Spring-Animationen. Nutzungs-Chart als sauberes SVG (Achsen, Gridlines, Tooltips). Button-Texte mit MD3-„on-container"-Kontrast (dunkler Text auf hellen Akzentflächen). Favicon = 💨 (Dampf); alle Icon-/Manifest-Pfade relativ (laufen hinter dem `/app/fog/`-Reverse-Proxy).
 > - **Auto-Fog-Intervalle:** 5 / 15 / 30 / 60 / 120 min, 1 h Auto-Off.
 > - **Deploy:** `git pull && sudo systemctl restart fog-controller`
@@ -126,7 +126,7 @@ in `fog-tank.db` (SQLite, `tank` + `refills` tables); MariaDB is untouched.
 
 - **Runtime** — Python 3.11, Flask 2
 - **Databases** — MariaDB via PyMySQL (usage analytics, optional) · SQLite (tank/fill-level, auto-created)
-- **Hardware** — RF433 transmitter on GPIO 17, RPi.GPIO (in-process, no sudo)
+- **Hardware** — RF433 transmitter on GPIO 17 via **rpi-lgpio** (RPi.GPIO-compatible shim; required on Pi 5 — classic `RPi.GPIO` fails with „Cannot determine SOC peripheral base address“)
 - **Process Manager** — systemd (`fog-controller.service`)
 
 ## Tests

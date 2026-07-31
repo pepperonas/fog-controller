@@ -1,4 +1,4 @@
 flask
 flask-cors
 pymysql
-RPi.GPIO
+rpi-lgpio
