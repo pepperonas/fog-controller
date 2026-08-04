@@ -123,11 +123,22 @@
            ein blankes `header` schlägt. */
         .header {
             background-color: transparent;
-            padding: var(--sh-pad-top) 0 var(--sh-gap-lg);
+            /* Kein zweites Oberpolster: die 20 px zum Leistenrand kommen bereits
+               vom body — so macht es der Massstab. Beides zusammen ergab 40. */
+            padding: 0 0 var(--sh-gap-lg);
             box-shadow: none;
             position: static;
             max-width: var(--sh-measure);
             margin: 0 auto;
+        }
+
+        /* Untertitel wie im Massstab: linksbuendig unter dem Titel. Vorher
+           erzwang ein Inline-`text-align: center` die Mitte — und ein Inline-
+           Style ist aus keinem Stylesheet erreichbar, das musste ins Markup. */
+        .header .sub {
+            color: var(--text-secondary);
+            font-size: .95rem;
+            margin-top: .25rem;
         }
 
         .header h1 {
@@ -614,9 +625,14 @@ h1,h2,h3{ text-wrap:balance; }
 .chart-svg .axis-label{ fill:var(--text-secondary); font-size:9px; }
 .chart-svg .bar{ transition:height .35s var(--ease-emph), y .35s var(--ease-emph); cursor:default; }
 .chart-svg .bar:hover{ filter:brightness(1.15); }
+
+        .sh-i{display:inline-flex;align-items:center;justify-content:center;line-height:0}
+        .sh-i svg{width:1em;height:1em;display:block}
+        h1 .sh-i,h2 .sh-i,h3 .sh-i{margin-right:.4rem;vertical-align:-.1em}
+        .btn .sh-i{margin-right:.35rem}
 </style>
-    <script src="/shared/icons.js?v=1" defer></script>
-    <script src="/shared/nav.js?v=7" defer></script>
+    <script src="/shared/icons.js?v=4" defer></script>
+    <script src="/shared/nav.js?v=9" defer></script>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
 </head>
@@ -631,7 +647,7 @@ h1,h2,h3{ text-wrap:balance; }
 
     <header class="header">
         <h1><span data-sh-icon="fog"></span>  Fog Controller</h1>
-        <p style="text-align: center; color: var(--text-secondary); margin-top: var(--spacing-2);">
+        <p class="sub">
             RF433 Nebelmaschinen-Steuerung via Raspberry Pi
         </p>
     </header>
@@ -639,7 +655,7 @@ h1,h2,h3{ text-wrap:balance; }
     <div class="container">
         <!-- Main Control -->
         <div class="card">
-            <h2>💨 Nebelmaschine Steuerung</h2>
+            <h2><span class="sh-i" data-sh-icon="mist" aria-hidden="true"></span>Nebelmaschine Steuerung</h2>
             <div class="fog-button" id="fog-btn">
                 <span style="font-size: 60px;"><span data-sh-icon="fog"></span> </span>
             </div>
@@ -691,7 +707,7 @@ h1,h2,h3{ text-wrap:balance; }
 
         <!-- Tank / Füllstand -->
         <div class="card tank-card">
-            <h2>💧 Tankfüllstand</h2>
+            <h2><span class="sh-i" data-sh-icon="droplet" aria-hidden="true"></span>Tankfüllstand</h2>
             <div class="tank-layout">
                 <div class="tank-gauge">
                     <svg viewBox="0 0 100 150" role="img" aria-label="Tankfüllstand">
@@ -721,8 +737,8 @@ h1,h2,h3{ text-wrap:balance; }
                     <div class="tank-sub">Ø <b id="tank-rate">–</b> ml/Aktivierung · <span id="tank-cycle">0</span> seit Nachfüllen</div>
                     <span class="badge" id="tank-badge" style="display:none;">noch nicht kalibriert</span>
                     <div class="tank-actions">
-                        <button class="btn btn-primary" id="tank-refill-btn" style="min-height:40px;">💧 Nachgefüllt</button>
-                        <button class="btn btn-tonal" id="tank-capacity-btn" style="min-height:40px;">⚙︎ Tankgröße</button>
+                        <button class="btn btn-primary" id="tank-refill-btn" style="min-height:40px;"><span class="sh-i" data-sh-icon="droplet" aria-hidden="true"></span>Nachgefüllt</button>
+                        <button class="btn btn-tonal" id="tank-capacity-btn" style="min-height:40px;"><span class="sh-i" data-sh-icon="gear" aria-hidden="true"></span>Tankgröße</button>
                     </div>
                 </div>
             </div>
@@ -741,7 +757,7 @@ h1,h2,h3{ text-wrap:balance; }
             <h2>Erweiterte Steuerung</h2>
             <div class="control-grid">
                 <button class="btn btn-danger" id="force-off">
-                    <span>🔴 NOTAUS</span>
+                    <span><span class="sh-i" data-sh-icon="power" aria-hidden="true"></span>NOTAUS</span>
                 </button>
             </div>
         </div>
@@ -750,7 +766,7 @@ h1,h2,h3{ text-wrap:balance; }
     <!-- Refill dialog -->
     <div class="dialog-backdrop" id="refill-dialog">
         <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="refill-title">
-            <h3 id="refill-title">💧 Tank nachgefüllt</h3>
+            <h3 id="refill-title"><span class="sh-i" data-sh-icon="droplet" aria-hidden="true"></span>Tank nachgefüllt</h3>
             <p class="hint">Wie war der Tank vor dem Nachfüllen? Deine Angabe verbessert die Verbrauchsschätzung.</p>
             <div class="field">
                 <div class="seg" id="refill-empty-seg">
@@ -779,7 +795,7 @@ h1,h2,h3{ text-wrap:balance; }
     <!-- Capacity dialog -->
     <div class="dialog-backdrop" id="capacity-dialog">
         <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="cap-title">
-            <h3 id="cap-title">⚙︎ Tankgröße</h3>
+            <h3 id="cap-title"><span class="sh-i" data-sh-icon="gear" aria-hidden="true"></span>Tankgröße</h3>
             <p class="hint">Fassungsvermögen des Tanks. Der Verbrauch pro Aktivierung wird automatisch kalibriert.</p>
             <div class="field" style="margin-bottom:0;">
                 <label for="capacity-input">Kapazität (ml)</label>
@@ -954,7 +970,7 @@ h1,h2,h3{ text-wrap:balance; }
                     const result = await response.json();
                     
                     if (result.success) {
-                        this.showMessage(`🌫️ ${result.message}`, 'success');
+                        this.showMessage(`${result.message}`, 'success');
                         this.updateUI(result.status === 'on');
                         // Reload status to get updated stats
                         setTimeout(() => this.loadStatus(), 500);
@@ -975,7 +991,7 @@ h1,h2,h3{ text-wrap:balance; }
                     const result = await response.json();
                     
                     if (result.success) {
-                        this.showMessage('🌫️ Nebelmaschine eingeschaltet', 'success');
+                        this.showMessage('Nebelmaschine eingeschaltet', 'success');
                         this.updateUI(true);
                         setTimeout(() => this.loadStatus(), 500);
                     } else {
@@ -1019,7 +1035,7 @@ h1,h2,h3{ text-wrap:balance; }
                         const remaining = Math.max(0, Math.ceil((data.autoDisableTime - Date.now()) / 1000 / 60));
                         this.elements.autoFogStatus.innerHTML = `
                             <span style="color: var(--accent-green);">
-                                ✅ Auto-Fog aktiv (alle ${data.interval} Min)
+                                Auto-Fog aktiv (alle ${data.interval} Min)
                             </span><br>
                             <span style="font-size: 0.9em;">
                                 Automatisch deaktiviert in ${remaining} Min
@@ -1165,8 +1181,8 @@ h1,h2,h3{ text-wrap:balance; }
                         this.renderTank(result);
                         this.closeDialog(this.elements.refillDialog);
                         this.showMessage(result.calibrated
-                            ? `💧 Nachgefüllt — Verbrauch kalibriert (${result.ml_per_activation} ml/Aktivierung)`
-                            : '💧 Nachgefüllt', 'success');
+                            ? `Nachgefüllt — Verbrauch kalibriert (${result.ml_per_activation} ml/Aktivierung)`
+                            : 'Nachgefüllt', 'success');
                     } else {
                         this.showMessage(result.error || 'Speichern fehlgeschlagen', 'error');
                     }
@@ -1292,7 +1308,7 @@ h1,h2,h3{ text-wrap:balance; }
     
     <!-- Footer -->
     <footer style="text-align: center; padding: 20px; margin-top: 40px; color: rgba(255, 255, 255, 0.6); font-size: 14px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
-        Made with ❤️ by Martin Pfeffer
+        Made with <span class="sh-i" data-sh-icon="heart" aria-hidden="true"></span> by Martin Pfeffer
     </footer>
 <script>/* cursor-sheen (gated, rAF-throttled, additiv) */
 (function(){try{
