@@ -76,7 +76,7 @@
             --text-primary: var(--sh-text);           /* on-surface */
             --text-secondary: var(--sh-text2);         /* on-surface-variant */
             --fog-active: #cbbdff;             /* tertiary (vibrant violet) */
-            --fog-inactive: #46474f;
+            --fog-inactive: var(--sh-outline);
             --ease-spring: linear(0,0.009 1.2%,0.035 2.5%,0.158 6%,0.793 18.4%,0.984 23%,1.07 27%,1.104 31.5%,1.103 35%,1.07 41%,1.013 50%,0.991 57%,0.998 75%,1);
             --ease-emph: var(--sh-ease);
 
@@ -163,10 +163,14 @@
         .card {
             background-color: var(--card-background);
             border-radius: var(--radius-xl);
-            padding: var(--spacing-6);
-            margin-bottom: var(--spacing-6);
-            box-shadow: var(--shadow);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            /* Kontur und Polster aus den Tokens. Ein Weiss-Alpha-Rahmen ergibt auf
+           #1c1d23 rund #2f3036 und damit eine deutlich schwaechere Kontur als
+           --sh-outline — nebeneinander sah dieselbe Karte hier anders aus als
+           drueben. Polster ebenso: 24 px gegen 18,4/19,2/16 im Massstab. */
+            padding: var(--sh-card-pad);
+            margin-bottom: var(--sh-gap-lg);
+            box-shadow: none;
+            border: 1px solid var(--sh-outline);
         }
 
         .card h2 {
