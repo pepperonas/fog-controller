@@ -410,75 +410,11 @@
             transition: opacity 3s ease-out;
         }
 
-        /* Sichtbarere Nebel-Layer ohne Performance-Verlust */
-        .fog-layer {
-            position: absolute;
-            width: 160%;
-            height: 110%;
-            background: radial-gradient(ellipse 130% 90% at center, 
-                rgba(255, 255, 255, 0.5) 0%,
-                rgba(240, 240, 255, 0.45) 15%,
-                rgba(220, 220, 240, 0.4) 30%,
-                rgba(200, 200, 225, 0.3) 50%,
-                rgba(180, 180, 210, 0.2) 70%,
-                rgba(160, 160, 195, 0.1) 85%,
-                transparent 100%);
-            border-radius: 50%;
-            filter: blur(20px);
-            animation-iteration-count: infinite;
-            animation-timing-function: linear;
-            animation-fill-mode: both;
-            /* Hardware acceleration beibehalten */
-            will-change: transform;
-            transform: translateZ(0);
-            backface-visibility: hidden;
-        }
-
-        /* Sichtbarere Hauptnebel-Schichten */
-        .fog-layer-1 {
-            top: 15%;
-            left: -85%;
-            animation: fogSimple1 35s infinite linear;
-            opacity: 0.8;
-        }
-
-        .fog-layer-2 {
-            top: 55%;
-            left: -95%;
-            animation: fogSimple2 45s infinite linear;
-            opacity: 0.7;
-            animation-delay: -18s;
-        }
-
-        .fog-layer-3 {
-            top: 5%;
-            right: -85%;
-            animation: fogSimple3 40s infinite linear;
-            opacity: 0.75;
-            animation-delay: -30s;
-        }
-
-        /* Sichtbarere Animationen mit sanften Bewegungen */
-        @keyframes fogSimple1 {
-            0% { transform: translate3d(-110vw, 0, 0) scale(0.7); }
-            30% { transform: translate3d(20vw, -3vh, 0) scale(1.2); }
-            70% { transform: translate3d(70vw, 2vh, 0) scale(0.9); }
-            100% { transform: translate3d(130vw, 0, 0) scale(0.8); }
-        }
-
-        @keyframes fogSimple2 {
-            0% { transform: translate3d(-130vw, 0, 0) scale(0.9); }
-            35% { transform: translate3d(10vw, 4vh, 0) scale(0.8); }
-            65% { transform: translate3d(60vw, -2vh, 0) scale(1.1); }
-            100% { transform: translate3d(140vw, 1vh, 0) scale(0.85); }
-        }
-
-        @keyframes fogSimple3 {
-            0% { transform: translate3d(110vw, 0, 0) scale(0.8); }
-            25% { transform: translate3d(10vw, 3vh, 0) scale(1.15); }
-            75% { transform: translate3d(-60vw, -1vh, 0) scale(0.95); }
-            100% { transform: translate3d(-130vw, 2vh, 0) scale(0.9); }
-        }
+        /* Realistischer Partikel-Nebel (2026-08-13): Canvas statt der drei
+           geblurrten CSS-Ellipsen — echte Schwaden mit Jet, Auftrieb und
+           Turbulenz, gerendert von FogFX (Script unten). Der Container behaelt
+           seine active/dissolving-Klassen-API — das Controller-JS ist unberuehrt. */
+        #fog-canvas { position:absolute; inset:0; width:100%; height:100%; }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -643,10 +579,7 @@ h1,h2,h3{ text-wrap:balance; }
 <body>
     <!-- Fog Animation Background - Simplified -->
     <div class="fog-background" id="fog-background">
-        <!-- Nur 3 Hauptnebel-Schichten für optimale Performance -->
-        <div class="fog-layer fog-layer-1"></div>
-        <div class="fog-layer fog-layer-2"></div>
-        <div class="fog-layer fog-layer-3"></div>
+        <canvas id="fog-canvas" aria-hidden="true"></canvas>
     </div>
 
     <header class="header">
@@ -743,6 +676,7 @@ h1,h2,h3{ text-wrap:balance; }
                     <div class="tank-actions">
                         <button class="btn btn-primary" id="tank-refill-btn" style="min-height:40px;"><span class="sh-i" data-sh-icon="droplet" aria-hidden="true"></span>Nachgefüllt</button>
                         <button class="btn btn-tonal" id="tank-capacity-btn" style="min-height:40px;"><span class="sh-i" data-sh-icon="gear" aria-hidden="true"></span>Tankgröße</button>
+                        <button class="btn btn-tonal" id="tank-calib-btn" style="min-height:40px;">⚖️ Kalibrieren</button>
                     </div>
                 </div>
             </div>
@@ -812,9 +746,215 @@ h1,h2,h3{ text-wrap:balance; }
         </div>
     </div>
 
+    <!-- Waagen-Kalibrierung: gefuehrter Ablauf Wiegen -> Bursts -> Wiegen ->
+         Nachfuellen -> Wiegen. Zustand lebt im SERVER (api/tank/calibrate) —
+         Dialog zu / Seite neu geladen = Wiedereinstieg im richtigen Schritt. -->
+    <div class="dialog-backdrop" id="calib-dialog">
+        <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="calib-title">
+            <h3 id="calib-title">⚖️ Verbrauch kalibrieren</h3>
+            <div id="calib-error" class="hint" style="display:none;color:var(--accent-red,#ff6b6b);font-weight:600;"></div>
+            <div id="calib-step-setup">
+                <p class="hint">Misst den echten Verbrauch je Nebelstoß mit einer Waage.
+                    Maschine <b>aufheizen lassen</b>, auf die Waage stellen und während der
+                    Kalibrierung <b>nicht anderweitig nebeln</b>. 1 g ≈ 1 ml.</p>
+                <div class="field">
+                    <label for="calib-g0">Startgewicht der Maschine (g)</label>
+                    <input type="number" id="calib-g0" min="1" step="1" placeholder="z. B. 2450" inputmode="decimal">
+                </div>
+                <div class="field">
+                    <label for="calib-bursts">Nebelstöße (1–20)</label>
+                    <input type="number" id="calib-bursts" min="1" max="20" step="1" value="5">
+                </div>
+                <div class="field" style="margin-bottom:0;">
+                    <label for="calib-gap">Abstand zwischen Stößen (Sekunden, 3–120)</label>
+                    <input type="number" id="calib-gap" min="3" max="120" step="1" value="10">
+                </div>
+                <div class="dialog-row">
+                    <button class="btn btn-tonal" id="calib-cancel-setup" style="min-height:40px;">Abbrechen</button>
+                    <button class="btn btn-primary" id="calib-start" style="min-height:40px;">Messlauf starten</button>
+                </div>
+            </div>
+            <div id="calib-step-burn" style="display:none;">
+                <p class="hint">Nebelstöße laufen — Maschine auf der Waage lassen.</p>
+                <div class="tank-pct" style="font-size:1.6rem;"><span id="calib-burn-n">–</span></div>
+                <div class="hint" id="calib-burn-next"></div>
+                <div class="dialog-row">
+                    <button class="btn btn-danger" id="calib-abort-burn" style="min-height:40px;">Messlauf abbrechen</button>
+                </div>
+            </div>
+            <div id="calib-step-weigh" style="display:none;">
+                <p class="hint">Fertig genebelt. Jetzt die Maschine <b>wiegen</b> und das Gewicht eintragen.</p>
+                <div class="field" style="margin-bottom:0;">
+                    <label for="calib-g1">Gewicht nach dem Nebeln (g)</label>
+                    <input type="number" id="calib-g1" min="1" step="1" placeholder="z. B. 2390" inputmode="decimal">
+                </div>
+                <div class="dialog-row">
+                    <button class="btn btn-tonal" id="calib-abort-weigh" style="min-height:40px;">Abbrechen</button>
+                    <button class="btn btn-primary" id="calib-weigh" style="min-height:40px;">Weiter</button>
+                </div>
+            </div>
+            <div id="calib-step-refill" style="display:none;">
+                <p class="hint">Gemessen: <b id="calib-consumed">–</b> ml über
+                    <b id="calib-bursts-done">–</b> Stöße = <b id="calib-sample">–</b> ml je Stoß.<br>
+                    Jetzt <b>nachfüllen</b>, dann die Maschine erneut wiegen.</p>
+                <div class="field" style="margin-bottom:0;">
+                    <label for="calib-g2">Gewicht nach dem Nachfüllen (g)</label>
+                    <input type="number" id="calib-g2" min="1" step="1" placeholder="z. B. 2500" inputmode="decimal">
+                </div>
+                <div class="dialog-row">
+                    <button class="btn btn-tonal" id="calib-abort-refill" style="min-height:40px;">Abbrechen</button>
+                    <button class="btn btn-primary" id="calib-finish" style="min-height:40px;">Kalibrierung abschließen</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="message" id="message"></div>
 
     <script>
+        // ---- FogFX: realistischer Partikel-Nebel (2026-08-13) --------------
+        // Puff-Sprites (unregelmaessige Wolken aus versetzten Radial-Gradienten,
+        // offscreen vorgerendert) stroemen beim Aktivieren als JET von unten
+        // ein, expandieren, steigen traege und werden von einem Pseudo-Curl-
+        // Feld (inkommensurable Sinusse) verwirbelt. Angebunden ueber einen
+        // MutationObserver auf die BESTEHENDE active/dissolving-Klassen-API
+        // des #fog-background — null Eingriff ins Controller-JS.
+        const FogFX = (() => {
+            const bg = document.getElementById('fog-background');
+            const cv = document.getElementById('fog-canvas');
+            if (!bg || !cv) return null;
+            const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const ctx = cv.getContext('2d');
+            const DPR = Math.min(2, devicePixelRatio || 1);
+            let W = 0, H = 0;
+            const resize = () => {
+                W = bg.clientWidth; H = bg.clientHeight;
+                cv.width = W * DPR; cv.height = H * DPR;
+                ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+            };
+            resize();
+            addEventListener('resize', resize);
+
+            // Zwei Sprite-Varianten: je 4 versetzte weiche Blobs — die
+            // Unregelmaessigkeit ist es, die "Wolke" statt "Kreis" liest.
+            const makeSprite = (seed) => {
+                const s = document.createElement('canvas');
+                s.width = s.height = 160;
+                const c = s.getContext('2d');
+                let r = seed;
+                const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+                for (let i = 0; i < 4; i++) {
+                    const x = 80 + (rnd() - .5) * 64, y = 80 + (rnd() - .5) * 56;
+                    const rad = 34 + rnd() * 38;
+                    const g = c.createRadialGradient(x, y, 0, x, y, rad);
+                    g.addColorStop(0, 'rgba(225,230,245,0.28)');
+                    g.addColorStop(.55, 'rgba(205,210,232,0.13)');
+                    g.addColorStop(1, 'rgba(190,195,220,0)');
+                    c.fillStyle = g;
+                    c.beginPath(); c.arc(x, y, rad, 0, 7); c.fill();
+                }
+                return s;
+            };
+            const sprites = [makeSprite(1234567), makeSprite(7654321)];
+
+            const parts = [];          // {x,y,vx,vy,rot,rv,sc,grow,a,fade,sp,born}
+            const MAX = 70;
+            let mode = 'idle';         // idle | active | dissolving
+            let raf = null, last = 0, emitAcc = 0, burstLeft = 0;
+
+            const spawn = (burst) => {
+                if (parts.length >= MAX) return;
+                // Jet-Quelle: unten, leicht rechts der Mitte (die "Maschine")
+                const jx = W * 0.62, jy = H + 30;
+                const ang = -Math.PI / 2 + (Math.random() - .5) * 1.1;
+                const sp = burst ? 90 + Math.random() * 150 : 25 + Math.random() * 45;
+                parts.push({
+                    x: jx + (Math.random() - .5) * 90, y: jy,
+                    vx: Math.cos(ang) * sp * .55, vy: Math.sin(ang) * sp,
+                    rot: Math.random() * 6.3, rv: (Math.random() - .5) * .25,
+                    sc: .35 + Math.random() * .4, grow: .05 + Math.random() * .08,
+                    a: 0, amax: .5 + Math.random() * .45,
+                    fade: burst ? 10 + Math.random() * 8 : 14 + Math.random() * 10,
+                    sp: sprites[(Math.random() * 2) | 0], born: performance.now() / 1000
+                });
+            };
+
+            const step = (ts) => {
+                raf = null;
+                const t = ts / 1000;
+                const dt = Math.min(.1, last ? t - last : .016);
+                last = t;
+                // Emission: Engage-Burst dicht, danach stetiger Nachschub
+                if (mode === 'active') {
+                    if (burstLeft > 0 && Math.random() < .7) { spawn(true); burstLeft--; }
+                    emitAcc += dt * 3;
+                    while (emitAcc >= 1) { emitAcc--; spawn(false); }
+                }
+                ctx.clearRect(0, 0, W, H);
+                for (let i = parts.length - 1; i >= 0; i--) {
+                    const p = parts[i];
+                    const age = t - p.born;
+                    // Pseudo-Curl: zwei inkommensurable Sinusfelder + Auftrieb
+                    p.vx += (Math.sin(p.y * .011 + t * .53) + .6 * Math.sin(p.y * .0043 - t * .21)) * 14 * dt;
+                    p.vy += (Math.cos(p.x * .009 + t * .47) * 6 - 9) * dt;
+                    p.vx *= (1 - .55 * dt); p.vy *= (1 - .55 * dt);
+                    p.x += p.vx * dt; p.y += p.vy * dt;
+                    p.rot += p.rv * dt;
+                    p.sc += p.grow * dt * (p.sc < 2.6 ? 1 : .15);
+                    const target = age < 1.2 ? p.amax * (age / 1.2) : p.amax * Math.exp(-(age - 1.2) / p.fade);
+                    p.a = mode === 'dissolving' ? p.a * (1 - 1.1 * dt) : target;
+                    if (p.a < .01 && age > 2) { parts.splice(i, 1); continue; }
+                    ctx.globalAlpha = Math.min(1, p.a);
+                    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate(p.rot);
+                    ctx.scale(p.sc, p.sc * .8);
+                    ctx.drawImage(p.sp, -80, -80);
+                }
+                ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+                ctx.globalAlpha = 1;
+                if (parts.length || mode === 'active') raf = requestAnimationFrame(step);
+                else ctx.clearRect(0, 0, W, H);
+            };
+            const kick = () => { if (!raf && !document.hidden) { last = 0; raf = requestAnimationFrame(step); } };
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden && raf) { cancelAnimationFrame(raf); raf = null; }
+                else kick();
+            });
+
+            const staticFrame = () => {
+                // reduced-motion: ein ruhiges, einmalig gemaltes Nebelbild
+                ctx.clearRect(0, 0, W, H);
+                for (let i = 0; i < 7; i++) {
+                    ctx.globalAlpha = .5;
+                    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+                    ctx.translate(W * (0.12 + i * 0.13), H * (0.35 + ((i * 37) % 50) / 100));
+                    ctx.scale(2.2, 1.7);
+                    ctx.drawImage(sprites[i % 2], -80, -80);
+                }
+                ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+                ctx.globalAlpha = 1;
+            };
+
+            const apply = () => {
+                const next = bg.classList.contains('active') ? 'active'
+                    : bg.classList.contains('dissolving') ? 'dissolving' : 'idle';
+                if (next === mode) return;
+                const was = mode;
+                mode = next;
+                if (reduced) {
+                    if (mode === 'active') staticFrame();
+                    else ctx.clearRect(0, 0, W, H);
+                    return;
+                }
+                if (mode === 'active' && was !== 'dissolving') burstLeft = 22;
+                kick();
+            };
+            new MutationObserver(apply).observe(bg, { attributes: true, attributeFilter: ['class'] });
+            apply();
+            return { apply };
+        })();
+
         class FogController {
             constructor() {
                 this.initializeElements();
@@ -864,8 +1004,29 @@ h1,h2,h3{ text-wrap:balance; }
                     capacityDialog: document.getElementById('capacity-dialog'),
                     capacityInput: document.getElementById('capacity-input'),
                     capacityCancel: document.getElementById('capacity-cancel'),
-                    capacityConfirm: document.getElementById('capacity-confirm')
+                    capacityConfirm: document.getElementById('capacity-confirm'),
+                    // scale calibration
+                    tankCalibBtn: document.getElementById('tank-calib-btn'),
+                    calibDialog: document.getElementById('calib-dialog'),
+                    calibError: document.getElementById('calib-error'),
+                    calibSteps: {
+                        setup: document.getElementById('calib-step-setup'),
+                        burning: document.getElementById('calib-step-burn'),
+                        weigh: document.getElementById('calib-step-weigh'),
+                        refill: document.getElementById('calib-step-refill')
+                    },
+                    calibG0: document.getElementById('calib-g0'),
+                    calibBursts: document.getElementById('calib-bursts'),
+                    calibGap: document.getElementById('calib-gap'),
+                    calibBurnN: document.getElementById('calib-burn-n'),
+                    calibBurnNext: document.getElementById('calib-burn-next'),
+                    calibG1: document.getElementById('calib-g1'),
+                    calibG2: document.getElementById('calib-g2'),
+                    calibConsumed: document.getElementById('calib-consumed'),
+                    calibBurstsDone: document.getElementById('calib-bursts-done'),
+                    calibSample: document.getElementById('calib-sample')
                 };
+                this._calibPoll = null;
                 this._capacity = 250;     // last known, for the capacity dialog default
             }
 
@@ -900,14 +1061,28 @@ h1,h2,h3{ text-wrap:balance; }
                 this.elements.capacityCancel.addEventListener('click', () => this.closeDialog(this.elements.capacityDialog));
                 this.elements.capacityConfirm.addEventListener('click', () => this.submitCapacity());
 
+                // Scale calibration: dialog close ≠ abort — der Messlauf lebt
+                // im Server; nur die Abbrechen-Buttons brechen ihn wirklich ab.
+                this.elements.tankCalibBtn.addEventListener('click', () => this.openCalib());
+                document.getElementById('calib-start').addEventListener('click', () => this.calibStart());
+                document.getElementById('calib-weigh').addEventListener('click', () => this.calibWeigh());
+                document.getElementById('calib-finish').addEventListener('click', () => this.calibFinish());
+                document.getElementById('calib-cancel-setup').addEventListener('click', () => this.closeCalib());
+                ['calib-abort-burn', 'calib-abort-weigh', 'calib-abort-refill'].forEach(id =>
+                    document.getElementById(id).addEventListener('click', () => this.calibAbort()));
+
                 // Backdrop click + Esc close any dialog
                 [this.elements.refillDialog, this.elements.capacityDialog].forEach(d => {
                     d.addEventListener('click', (e) => { if (e.target === d) this.closeDialog(d); });
+                });
+                this.elements.calibDialog.addEventListener('click', (e) => {
+                    if (e.target === this.elements.calibDialog) this.closeCalib();
                 });
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape') {
                         this.closeDialog(this.elements.refillDialog);
                         this.closeDialog(this.elements.capacityDialog);
+                        this.closeCalib();
                     }
                 });
             }
@@ -1223,6 +1398,121 @@ h1,h2,h3{ text-wrap:balance; }
                 } catch (error) {
                     this.showMessage('Verbindungsfehler', 'error');
                 }
+            }
+
+            // ---- Waagen-Kalibrierung (Zustand lebt im Server) ------------
+            _calibShowStep(phase) {
+                Object.entries(this.elements.calibSteps).forEach(([k, el]) =>
+                    el.style.display = (k === phase ? '' : 'none'));
+            }
+
+            _calibError(msg) {
+                this.elements.calibError.textContent = msg || '';
+                this.elements.calibError.style.display = msg ? '' : 'none';
+            }
+
+            async openCalib() {
+                this._calibError('');
+                // Wiedereinstieg: der Server kennt den Schritt (Dialog zu /
+                // Seite neu geladen ändert daran nichts)
+                let st = { phase: 'idle' };
+                try { st = await (await fetch('api/tank/calibrate')).json(); } catch (e) {}
+                this._calibRender(st);
+                this.openDialog(this.elements.calibDialog);
+                this._calibStartPolling();
+            }
+
+            closeCalib() {
+                this.closeDialog(this.elements.calibDialog);
+                this._calibStopPolling();
+            }
+
+            _calibRender(st) {
+                const phase = (st && st.phase) || 'idle';
+                if (st && st.error) this._calibError(st.error);
+                if (phase === 'idle') { this._calibShowStep('setup'); return; }
+                this._calibShowStep(phase);
+                if (phase === 'burning') {
+                    this.elements.calibBurnN.textContent =
+                        `Stoß ${st.done} von ${st.bursts}`;
+                    this.elements.calibBurnNext.textContent =
+                        st.done < st.bursts && st.next_in_s != null
+                            ? `nächster in ${Math.ceil(st.next_in_s)} s` : '';
+                } else if (phase === 'refill') {
+                    this.elements.calibConsumed.textContent = st.consumed_ml ?? '–';
+                    this.elements.calibBurstsDone.textContent = st.bursts ?? '–';
+                    this.elements.calibSample.textContent = st.sample_ml ?? '–';
+                }
+            }
+
+            _calibStartPolling() {
+                this._calibStopPolling();
+                this._calibPoll = setInterval(async () => {
+                    if (!this.elements.calibDialog.classList.contains('show')) return;
+                    try {
+                        const st = await (await fetch('api/tank/calibrate')).json();
+                        if (st.phase === 'burning' || st.phase === 'weigh') this._calibRender(st);
+                    } catch (e) {}
+                }, 1000);
+            }
+
+            _calibStopPolling() {
+                if (this._calibPoll) { clearInterval(this._calibPoll); this._calibPoll = null; }
+            }
+
+            async _calibPost(path, body) {
+                this._calibError('');
+                try {
+                    const r = await fetch(path, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body || {})
+                    });
+                    const st = await r.json();
+                    if (!st.success) { this._calibError(st.error || 'Fehlgeschlagen'); return null; }
+                    return st;
+                } catch (e) {
+                    this._calibError('Verbindungsfehler');
+                    return null;
+                }
+            }
+
+            async calibStart() {
+                const g0 = parseFloat(this.elements.calibG0.value);
+                if (isNaN(g0) || g0 <= 0) { this._calibError('Startgewicht eingeben'); return; }
+                const st = await this._calibPost('api/tank/calibrate/start', {
+                    weight_g: g0,
+                    bursts: parseInt(this.elements.calibBursts.value, 10) || 5,
+                    gap_s: parseFloat(this.elements.calibGap.value) || 10
+                });
+                if (st) this._calibRender(st);
+            }
+
+            async calibWeigh() {
+                const g1 = parseFloat(this.elements.calibG1.value);
+                if (isNaN(g1) || g1 <= 0) { this._calibError('Gewicht eingeben'); return; }
+                const st = await this._calibPost('api/tank/calibrate/weigh', { weight_g: g1 });
+                if (st) this._calibRender(st);
+            }
+
+            async calibFinish() {
+                const g2 = parseFloat(this.elements.calibG2.value);
+                if (isNaN(g2) || g2 <= 0) { this._calibError('Gewicht eingeben'); return; }
+                const st = await this._calibPost('api/tank/calibrate/finish', { weight_g: g2 });
+                if (!st) return;
+                this.renderTank(st);
+                this.closeCalib();
+                this.showMessage(`Kalibriert: ${st.ml_per_activation} ml je Stoß `
+                    + `(vorher ${st.ml_per_activation_old}) · Tank ${Math.round(st.level_ml)} ml`,
+                    'success');
+            }
+
+            async calibAbort() {
+                await this._calibPost('api/tank/calibrate/abort', {});
+                this._calibError('');
+                this._calibShowStep('setup');
+                this.closeCalib();
+                this.showMessage('Kalibrierung abgebrochen — nichts gespeichert', 'success');
             }
 
             async loadUsageChart() {
