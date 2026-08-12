@@ -860,14 +860,37 @@ h1,h2,h3{ text-wrap:balance; }
             const parts = [];          // {x,y,vx,vy,rot,rv,sc,grow,a,fade,sp,born}
             const MAX = 90;
             let mode = 'idle';         // idle | active | dissolving
-            let raf = null, last = 0, emitAcc = 0, burstLeft = 0;
+            let raf = null, last = 0, emitAcc = 0, driftAcc = 0, burstLeft = 0;
 
-            const spawn = (burst) => {
+            // Zwei Partikel-Sorten: der JET (Maschinen-Ausstoss unten) und
+            // grosse DRIFT-Schwaden, die quer durch den ganzen Viewport ziehen
+            // — die Karten sind opak, ohne die Schwaden spielte der Nebel
+            // unsichtbar hinter ihnen (Sichttest 2026-08-13).
+            const spawn = (kind, seedX) => {
                 if (parts.length >= MAX) return;
-                // Jet-Quelle: unten, leicht rechts der Mitte (die "Maschine")
+                const now = performance.now() / 1000;
+                if (kind === 'drift') {
+                    const fromLeft = Math.random() < .6;
+                    parts.push({
+                        x: seedX != null ? seedX : (fromLeft ? -140 : W + 140),
+                        y: H * (0.08 + Math.random() * 0.84),
+                        vx: (fromLeft ? 1 : -1) * (26 + Math.random() * 46), vy: -4 - Math.random() * 8,
+                        rot: Math.random() * 6.3, rv: (Math.random() - .5) * .12,
+                        sc: 1.6 + Math.random() * 1.8, grow: .05 + Math.random() * .06,
+                        a: 0, amax: .5 + Math.random() * .4,
+                        fade: 22 + Math.random() * 14,
+                        sp: sprites[(Math.random() * 2) | 0],
+                        // seeded = beim Engage im Bild verteilt: rueckdatiert,
+                        // damit sie SOFORT voll sichtbar sind (nicht erst nach
+                        // der Einblendkurve — die saehe man beim Einschalten nie)
+                        born: seedX != null ? now - 2 : now
+                    });
+                    return;
+                }
+                const burst = kind === 'burst';
                 const jx = W * 0.62, jy = H + 30;
                 const ang = -Math.PI / 2 + (Math.random() - .5) * 1.1;
-                const sp = burst ? 90 + Math.random() * 150 : 25 + Math.random() * 45;
+                const sp = burst ? 120 + Math.random() * 180 : 40 + Math.random() * 60;
                 parts.push({
                     x: jx + (Math.random() - .5) * 90, y: jy,
                     vx: Math.cos(ang) * sp * .55, vy: Math.sin(ang) * sp,
@@ -886,9 +909,11 @@ h1,h2,h3{ text-wrap:balance; }
                 last = t;
                 // Emission: Engage-Burst dicht, danach stetiger Nachschub
                 if (mode === 'active') {
-                    if (burstLeft > 0 && Math.random() < .7) { spawn(true); burstLeft--; }
+                    if (burstLeft > 0 && Math.random() < .7) { spawn('burst'); burstLeft--; }
                     emitAcc += dt * 5;
-                    while (emitAcc >= 1) { emitAcc--; spawn(false); }
+                    while (emitAcc >= 1) { emitAcc--; spawn('jet'); }
+                    driftAcc += dt * 1.4;
+                    while (driftAcc >= 1) { driftAcc--; spawn('drift'); }
                 }
                 ctx.clearRect(0, 0, W, H);
                 for (let i = parts.length - 1; i >= 0; i--) {
@@ -896,7 +921,7 @@ h1,h2,h3{ text-wrap:balance; }
                     const age = t - p.born;
                     // Pseudo-Curl: zwei inkommensurable Sinusfelder + Auftrieb
                     p.vx += (Math.sin(p.y * .011 + t * .53) + .6 * Math.sin(p.y * .0043 - t * .21)) * 14 * dt;
-                    p.vy += (Math.cos(p.x * .009 + t * .47) * 6 - 15) * dt;
+                    p.vy += (Math.cos(p.x * .009 + t * .47) * 6 - 26) * dt;
                     p.vx *= (1 - .55 * dt); p.vy *= (1 - .55 * dt);
                     p.x += p.vx * dt; p.y += p.vy * dt;
                     p.rot += p.rv * dt;
@@ -947,7 +972,11 @@ h1,h2,h3{ text-wrap:balance; }
                     else ctx.clearRect(0, 0, W, H);
                     return;
                 }
-                if (mode === 'active' && was !== 'dissolving') burstLeft = 34;
+                if (mode === 'active' && was !== 'dissolving') {
+                    burstLeft = 34;
+                    // Sofort-Fuellung: Schwaden ueber den ganzen Viewport verteilen
+                    for (let i = 0; i < 9; i++) spawn('drift', Math.random() * W);
+                }
                 kick();
             };
             new MutationObserver(apply).observe(bg, { attributes: true, attributeFilter: ['class'] });
