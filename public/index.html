@@ -847,8 +847,8 @@ h1,h2,h3{ text-wrap:balance; }
                     const x = 80 + (rnd() - .5) * 64, y = 80 + (rnd() - .5) * 56;
                     const rad = 34 + rnd() * 38;
                     const g = c.createRadialGradient(x, y, 0, x, y, rad);
-                    g.addColorStop(0, 'rgba(225,230,245,0.28)');
-                    g.addColorStop(.55, 'rgba(205,210,232,0.13)');
+                    g.addColorStop(0, 'rgba(228,233,248,0.5)');
+                    g.addColorStop(.55, 'rgba(208,214,236,0.24)');
                     g.addColorStop(1, 'rgba(190,195,220,0)');
                     c.fillStyle = g;
                     c.beginPath(); c.arc(x, y, rad, 0, 7); c.fill();
@@ -858,7 +858,7 @@ h1,h2,h3{ text-wrap:balance; }
             const sprites = [makeSprite(1234567), makeSprite(7654321)];
 
             const parts = [];          // {x,y,vx,vy,rot,rv,sc,grow,a,fade,sp,born}
-            const MAX = 70;
+            const MAX = 90;
             let mode = 'idle';         // idle | active | dissolving
             let raf = null, last = 0, emitAcc = 0, burstLeft = 0;
 
@@ -872,8 +872,8 @@ h1,h2,h3{ text-wrap:balance; }
                     x: jx + (Math.random() - .5) * 90, y: jy,
                     vx: Math.cos(ang) * sp * .55, vy: Math.sin(ang) * sp,
                     rot: Math.random() * 6.3, rv: (Math.random() - .5) * .25,
-                    sc: .35 + Math.random() * .4, grow: .05 + Math.random() * .08,
-                    a: 0, amax: .5 + Math.random() * .45,
+                    sc: .6 + Math.random() * .7, grow: .09 + Math.random() * .13,
+                    a: 0, amax: .65 + Math.random() * .35,
                     fade: burst ? 10 + Math.random() * 8 : 14 + Math.random() * 10,
                     sp: sprites[(Math.random() * 2) | 0], born: performance.now() / 1000
                 });
@@ -887,7 +887,7 @@ h1,h2,h3{ text-wrap:balance; }
                 // Emission: Engage-Burst dicht, danach stetiger Nachschub
                 if (mode === 'active') {
                     if (burstLeft > 0 && Math.random() < .7) { spawn(true); burstLeft--; }
-                    emitAcc += dt * 3;
+                    emitAcc += dt * 5;
                     while (emitAcc >= 1) { emitAcc--; spawn(false); }
                 }
                 ctx.clearRect(0, 0, W, H);
@@ -896,11 +896,11 @@ h1,h2,h3{ text-wrap:balance; }
                     const age = t - p.born;
                     // Pseudo-Curl: zwei inkommensurable Sinusfelder + Auftrieb
                     p.vx += (Math.sin(p.y * .011 + t * .53) + .6 * Math.sin(p.y * .0043 - t * .21)) * 14 * dt;
-                    p.vy += (Math.cos(p.x * .009 + t * .47) * 6 - 9) * dt;
+                    p.vy += (Math.cos(p.x * .009 + t * .47) * 6 - 15) * dt;
                     p.vx *= (1 - .55 * dt); p.vy *= (1 - .55 * dt);
                     p.x += p.vx * dt; p.y += p.vy * dt;
                     p.rot += p.rv * dt;
-                    p.sc += p.grow * dt * (p.sc < 2.6 ? 1 : .15);
+                    p.sc += p.grow * dt * (p.sc < 3.4 ? 1 : .15);
                     const target = age < 1.2 ? p.amax * (age / 1.2) : p.amax * Math.exp(-(age - 1.2) / p.fade);
                     p.a = mode === 'dissolving' ? p.a * (1 - 1.1 * dt) : target;
                     if (p.a < .01 && age > 2) { parts.splice(i, 1); continue; }
@@ -947,7 +947,7 @@ h1,h2,h3{ text-wrap:balance; }
                     else ctx.clearRect(0, 0, W, H);
                     return;
                 }
-                if (mode === 'active' && was !== 'dissolving') burstLeft = 22;
+                if (mode === 'active' && was !== 'dissolving') burstLeft = 34;
                 kick();
             };
             new MutationObserver(apply).observe(bg, { attributes: true, attributeFilter: ['class'] });
