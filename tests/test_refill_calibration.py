@@ -245,3 +245,70 @@ class FogTimeTracking(unittest.TestCase):
         self.assertLess(s["level_ml"], 250.0)
         self.assertGreater(s["level_ml"], 245.0)
         server._fog_on_ts = None
+
+
+class UsageAnalytics(unittest.TestCase):
+    """Zeitfenster-Buckets + Refill-Marker (2026-08-14)."""
+
+    def setUp(self):
+        _fresh_tank()
+
+    def test_bucket_spec_known_and_fallback(self):
+        self.assertEqual(server.usage_bucket_spec("1h"), (3600, 300))
+        self.assertEqual(server.usage_bucket_spec("30d"), (2592000, 86400))
+        self.assertEqual(server.usage_bucket_spec("quatsch"),
+                         server.usage_bucket_spec("24h"))
+
+    def test_refills_since_filters_and_sorts(self):
+        # Stand erst absenken — in einen vollen Tank passt nichts hinein
+        # (added = level_after - remaining ware sonst korrekt 0)
+        for _ in range(8):
+            server.tank_bump_activation()
+        server.tank_refill(amount_ml=30)
+        for _ in range(8):
+            server.tank_bump_activation()
+        server.tank_refill(amount_ml=50)
+        out = server.usage_refills_since(0)
+        self.assertEqual([r["ml"] for r in out], [30.0, 50.0])
+        self.assertLessEqual(out[0]["t"], out[1]["t"])
+        # Zukunfts-Start filtert alles weg
+        self.assertEqual(server.usage_refills_since(out[-1]["t"] + 10), [])
+
+    def test_analytics_without_db_returns_gapless_buckets(self):
+        # _db_ok ist im Test False — Buckets kommen trotzdem lueckenlos
+        d = server.usage_analytics("1h")
+        self.assertEqual(d["bucket_s"], 300)
+        self.assertEqual(len(d["buckets"]), 12)
+        self.assertTrue(all(b["count"] == 0 for b in d["buckets"]))
+        # Buckets sind chronologisch und lueckenlos
+        ts = [b["t"] for b in d["buckets"]]
+        self.assertEqual(ts, sorted(ts))
+        self.assertTrue(all(ts[i+1] - ts[i] == 300 for i in range(len(ts)-1)))
+
+
+class ResumeCalibration(unittest.TestCase):
+    """Resume: Lauf ab letztem Randvoll-Punkt rekonstruieren (Restart-fest)."""
+
+    def setUp(self):
+        _fresh_tank()
+        server.refill_cal_abort()
+        server.config["activationCount"] = 100
+        server.config["fogSecondsTotal"] = 500.0
+        server._fog_on_ts = None
+
+    def test_resume_counts_since_last_brim(self):
+        # Randvoll gebucht + 4 Bursts/80 s VOR dem (simulierten) Restart
+        server.refill_cal_start(250)
+        server.config["activationCount"] += 4
+        for _ in range(4):
+            server.tank_bump_activation()
+        server.config["fogSecondsTotal"] += 80.0
+        server.tank_bump_seconds(80.0)
+        server.refill_cal_abort()          # "Restart": Cal-Zustand weg
+        level_before = server.tank_state()["level_ml"]
+        st = server.refill_cal_start(250, resume=True)
+        self.assertEqual(st["phase"], "fogging")
+        self.assertEqual(st["acts"], 4, "Zaehler ab letztem Randvoll-Punkt")
+        self.assertAlmostEqual(st["fog_s"], 80.0)
+        # Level wurde NICHT neu auf randvoll gebucht
+        self.assertEqual(server.tank_state()["level_ml"], level_before)

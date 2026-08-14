@@ -559,6 +559,16 @@ h1,h2,h3{ text-wrap:balance; }
 .dialog-row{ display:flex; gap:var(--spacing-3); justify-content:flex-end; margin-top:var(--spacing-6); }
 
 /* ---- Chart (SVG) ---- */
+.chart-ranges{ display:inline-flex; gap:4px; }
+.chart-ranges button{ background:none; border:1px solid var(--sh-outline, rgba(255,255,255,.15));
+    color:var(--text-secondary); border-radius:999px; padding:3px 10px; font-size:.72rem;
+    font-weight:700; cursor:pointer; transition:all .15s ease; }
+.chart-ranges button:hover{ color:var(--text-primary); }
+.chart-ranges button.active{ background:var(--accent-blue); border-color:var(--accent-blue);
+    color:#fff; }
+.chart-svg .refill-line{ stroke:var(--accent-green); stroke-width:1.4;
+    stroke-dasharray:3 3; opacity:.8; }
+.chart-svg .refill-drop{ fill:var(--accent-green); }
 #usage-chart{ display:block; }
 .chart-svg{ width:100%; height:auto; display:block; font-family:var(--font-family); }
 .chart-svg .grid-line{ stroke:var(--outline); stroke-width:1; opacity:.4; }
@@ -648,8 +658,9 @@ h1,h2,h3{ text-wrap:balance; }
                 </div>
                 <div class="tank-meta">
                     <div class="tank-pct"><span id="tank-pct">–</span><small id="tank-ml"></small></div>
-                    <div class="tank-sub">Reicht noch für ~<b id="tank-remaining">–</b> Aktivierungen</div>
-                    <div class="tank-sub">Ø <b id="tank-rate">–</b> ml/Aktivierung · <span id="tank-cycle">0</span> seit Nachfüllen</div>
+                    <div class="tank-sub">Reicht noch für ~<b id="tank-remaining">–</b> <span id="tank-remaining-unit">Aktivierungen</span></div>
+                    <div class="tank-sub">Ø <b id="tank-rate">–</b> <span id="tank-rate-unit">ml/Aktivierung</span> · <span id="tank-cycle">0</span> seit Nachfüllen</div>
+                    <div class="tank-sub">Nebelzeit seit Nachfüllen: <b id="tank-active">0 s</b></div>
                     <span class="badge" id="tank-badge" style="display:none;">noch nicht kalibriert</span>
                     <div class="tank-actions">
                         <button class="btn btn-primary" id="tank-refill-btn" style="min-height:40px;"><span class="sh-i" data-sh-icon="droplet" aria-hidden="true"></span>Nachgefüllt</button>
@@ -662,7 +673,15 @@ h1,h2,h3{ text-wrap:balance; }
 
         <!-- Usage Chart -->
         <div class="card">
-            <h2>Nutzungsverlauf <span style="font-size:.8rem;font-weight:500;color:var(--text-secondary);">(24 h)</span></h2>
+            <h2 style="display:flex;justify-content:space-between;align-items:center;gap:var(--spacing-3);flex-wrap:wrap;">Nutzungsverlauf
+                <span class="chart-ranges" id="usage-ranges" role="group" aria-label="Zeitraum">
+                    <button data-r="1h">1h</button>
+                    <button data-r="6h">6h</button>
+                    <button data-r="24h" class="active">24h</button>
+                    <button data-r="7d">7d</button>
+                    <button data-r="30d">30d</button>
+                </span>
+            </h2>
             <div id="usage-chart" style="min-height: 240px; background: var(--background-darker); border-radius: var(--radius); padding: var(--spacing-4); color: var(--text-secondary);">
                 Chart wird geladen...
             </div>
@@ -971,6 +990,9 @@ h1,h2,h3{ text-wrap:balance; }
                     tankRemaining: document.getElementById('tank-remaining'),
                     tankRate: document.getElementById('tank-rate'),
                     tankCycle: document.getElementById('tank-cycle'),
+                    tankActive: document.getElementById('tank-active'),
+                    tankRateUnit: document.getElementById('tank-rate-unit'),
+                    tankRemainingUnit: document.getElementById('tank-remaining-unit'),
                     tankBadge: document.getElementById('tank-badge'),
                     tankRefillBtn: document.getElementById('tank-refill-btn'),
                     tankCapacityBtn: document.getElementById('tank-capacity-btn'),
@@ -1038,6 +1060,14 @@ h1,h2,h3{ text-wrap:balance; }
                 document.getElementById('calib-finish').addEventListener('click', () => this.calibFinish());
                 document.getElementById('calib-cancel-setup').addEventListener('click', () => this.closeCalib());
                 document.getElementById('calib-abort').addEventListener('click', () => this.calibAbort());
+
+                // Nutzungsverlauf: Zeitraum-Chips (persistiert wie die
+                // Dashboard-Ranges in localStorage)
+                const r0 = localStorage.getItem('fog-usage-range') || '24h';
+                document.querySelectorAll('#usage-ranges button').forEach(b => {
+                    b.classList.toggle('active', b.dataset.r === r0);
+                    b.addEventListener('click', () => this.setUsageRange(b.dataset.r));
+                });
 
                 // Backdrop click + Esc close any dialog
                 [this.elements.refillDialog, this.elements.capacityDialog].forEach(d => {
@@ -1198,11 +1228,35 @@ h1,h2,h3{ text-wrap:balance; }
 
                 this.elements.tankPct.textContent = pct + '%';
                 this.elements.tankMl.textContent = `~${Math.round(s.level_ml)} / ${Math.round(s.capacity_ml)} ml`;
-                this.elements.tankRemaining.textContent =
-                    (s.est_activations_remaining == null ? '–' : s.est_activations_remaining);
-                this.elements.tankRate.textContent = s.ml_per_activation;
+                // Zeit-Modell (ml/s kalibriert): Restanzeige in Nebel-MINUTEN,
+                // Rate in ml/s — ehrlicher als Aktivierungs-Schaetzwerte
+                if (s.ml_per_second != null && s.est_seconds_remaining != null) {
+                    this.elements.tankRemaining.textContent =
+                        this.fmtActive(s.est_seconds_remaining);
+                    this.elements.tankRemainingUnit.textContent = 'Nebelzeit';
+                    this.elements.tankRate.textContent = s.ml_per_second;
+                    this.elements.tankRateUnit.textContent = 'ml/s';
+                } else {
+                    this.elements.tankRemaining.textContent =
+                        (s.est_activations_remaining == null ? '–' : s.est_activations_remaining);
+                    this.elements.tankRemainingUnit.textContent = 'Aktivierungen';
+                    this.elements.tankRate.textContent = s.ml_per_activation;
+                    this.elements.tankRateUnit.textContent = 'ml/Aktivierung';
+                }
                 this.elements.tankCycle.textContent = s.activations_since_refill;
+                this.elements.tankActive.textContent =
+                    this.fmtActive(s.fog_seconds_since_refill || 0);
                 this.elements.tankBadge.style.display = s.calibrated ? 'none' : '';
+            }
+
+            // 47 s · 12:34 min · 1:05 h — die Aktivzeit sinnvoll formatiert
+            fmtActive(sec) {
+                sec = Math.max(0, Math.round(sec));
+                if (sec < 60) return sec + ' s';
+                const m = Math.floor(sec / 60), s2 = String(sec % 60).padStart(2, '0');
+                if (m < 60) return m + ':' + s2 + ' min';
+                const h = Math.floor(m / 60), m2 = String(m % 60).padStart(2, '0');
+                return h + ':' + m2 + ' h';
             }
 
             openDialog(d) { d.classList.add('show'); }
@@ -1399,18 +1453,24 @@ h1,h2,h3{ text-wrap:balance; }
 
             async loadUsageChart() {
                 try {
-                    const response = await fetch('api/analytics/usage');
+                    const r = this._usageRange || localStorage.getItem('fog-usage-range') || '24h';
+                    this._usageRange = r;
+                    const response = await fetch('api/analytics/usage?range=' + r);
                     const data = await response.json();
-                    
-                    if (data.success && data.hourlyData) {
-                        this.renderChart(data.hourlyData);
-                    } else {
-                        this.elements.usageChart.innerHTML = '<div style="color: var(--text-secondary);">Keine Daten verfügbar</div>';
+                    if (data.success && data.buckets) {
+                        this.renderChart(data);
+                        if (this.elements.peakHour && data.peakHour)
+                            this.elements.peakHour.textContent = data.peakHour;
                     }
-                } catch (error) {
-                    console.error('Failed to load chart data:', error);
-                    this.elements.usageChart.innerHTML = '<div style="color: var(--accent-red);">Fehler beim Laden der Daten</div>';
-                }
+                } catch (e) { /* Chart ist Komfort — nie die App reissen */ }
+            }
+
+            setUsageRange(r) {
+                this._usageRange = r;
+                try { localStorage.setItem('fog-usage-range', r); } catch (e) {}
+                document.querySelectorAll('#usage-ranges button').forEach(b =>
+                    b.classList.toggle('active', b.dataset.r === r));
+                this.loadUsageChart();
             }
 
             _niceCeil(v) {
@@ -1420,24 +1480,28 @@ h1,h2,h3{ text-wrap:balance; }
                 return nice * pow;
             }
 
-            renderChart(hourlyData) {
-                const total = hourlyData.reduce((a, d) => a + d.count, 0);
-                if (total === 0) {
+            renderChart(data) {
+                const buckets = data.buckets, bucketS = data.bucket_s;
+                const total = buckets.reduce((a, d) => a + d.count, 0);
+                const RANGE_LABEL = { '1h': 'letzte Stunde', '6h': 'letzte 6 h',
+                    '24h': 'letzte 24 h', '7d': 'letzte 7 Tage', '30d': 'letzte 30 Tage' };
+                if (total === 0 && !(data.refills || []).length) {
                     this.elements.usageChart.innerHTML =
-                        '<div style="text-align:center;padding:96px 0;color:var(--text-secondary);">Noch keine Aktivierungen in den letzten 24 h</div>';
+                        '<div style="text-align:center;padding:96px 0;color:var(--text-secondary);">Keine Aktivierungen (' + (RANGE_LABEL[data.range] || data.range) + ')</div>';
                     return;
                 }
 
-                const W = 480, H = 220, padL = 28, padR = 8, padT = 12, padB = 22;
+                const W = 480, H = 220, padL = 28, padR = 8, padT = 14, padB = 22;
                 const plotW = W - padL - padR, plotH = H - padT - padB;
                 const x0 = padL, yBase = padT + plotH;
-                const bandW = plotW / 24, barW = bandW * 0.66;
-                const rawMax = Math.max(1, ...hourlyData.map(d => d.count));
+                const n = buckets.length;
+                const t0 = buckets[0].t, t1 = buckets[n - 1].t + bucketS;
+                const bandW = plotW / n, barW = Math.max(1.5, bandW * 0.66);
+                const rawMax = Math.max(1, ...buckets.map(d => d.count));
                 const niceMax = this._niceCeil(rawMax);
 
                 const ticks = [0, niceMax];
                 if (niceMax % 2 === 0 && niceMax >= 2) ticks.splice(1, 0, niceMax / 2);
-
                 let grid = '', ylabels = '';
                 ticks.forEach(t => {
                     const y = yBase - (t / niceMax) * plotH;
@@ -1445,26 +1509,50 @@ h1,h2,h3{ text-wrap:balance; }
                     ylabels += `<text class="axis-label" x="${padL - 5}" y="${(y + 3).toFixed(1)}" text-anchor="end">${t}</text>`;
                 });
 
+                const fmtT = (epoch) => {
+                    const d = new Date(epoch * 1000);
+                    if (bucketS >= 86400) return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' });
+                    if (bucketS >= 21600) return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' + d.getHours() + 'h';
+                    return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                };
+
                 let bars = '';
-                hourlyData.forEach((d, i) => {
+                buckets.forEach((d, i) => {
+                    if (!d.count) return;
                     const h = (d.count / niceMax) * plotH;
                     const x = x0 + i * bandW + (bandW - barW) / 2;
                     const y = yBase - h;
                     const frac = d.count / niceMax;
                     const color = frac > 0.7 ? 'var(--accent-red)'
                                 : frac > 0.4 ? 'var(--accent-orange)' : 'var(--accent-blue)';
-                    bars += `<rect class="bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="2" fill="${color}"><title>${d.hour}:00 — ${d.count} Aktivierungen</title></rect>`;
+                    const fog = d.fog_s > 0 ? ` · ${this.fmtActive(d.fog_s)} Nebel` : '';
+                    bars += `<rect class="bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="2" fill="${color}"><title>${fmtT(d.t)} — ${d.count} Aktivierung${d.count === 1 ? '' : 'en'}${fog}</title></rect>`;
+                });
+
+                // Nachfuell-Marker: gestrichelte Linie + Tropfen, Tooltip mit ml
+                let refills = '';
+                (data.refills || []).forEach(r => {
+                    if (r.t < t0 || r.t > t1) return;
+                    const x = x0 + ((r.t - t0) / (t1 - t0)) * plotW;
+                    const d = new Date(r.t * 1000);
+                    const when = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+                        + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+                    refills += `<g><title>Nachgefüllt: ${Math.round(r.ml)} ml — ${when}</title>`
+                        + `<line class="refill-line" x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${yBase}"></line>`
+                        + `<path class="refill-drop" transform="translate(${(x - 4).toFixed(1)}, ${padT - 11}) scale(0.34)" d="M12 3.2c2.8 3.4 6.4 7.1 6.4 10.4A6.4 6.4 0 0 1 5.6 13.6C5.6 10.3 9.2 6.6 12 3.2z"></path></g>`;
                 });
 
                 let xlabels = '';
-                [0, 6, 12, 18, 23].forEach(hr => {
-                    const x = x0 + hr * bandW + bandW / 2;
-                    xlabels += `<text class="axis-label" x="${x.toFixed(1)}" y="${(yBase + 14).toFixed(1)}" text-anchor="middle">${hr}h</text>`;
-                });
+                const nLabels = Math.min(5, n);
+                for (let k = 0; k < nLabels; k++) {
+                    const i = Math.round(k * (n - 1) / Math.max(1, nLabels - 1));
+                    const x = x0 + i * bandW + bandW / 2;
+                    xlabels += `<text class="axis-label" x="${x.toFixed(1)}" y="${(yBase + 14).toFixed(1)}" text-anchor="middle">${fmtT(buckets[i].t)}</text>`;
+                }
 
                 this.elements.usageChart.innerHTML =
-                    `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Aktivierungen pro Stunde">`
-                    + grid + ylabels + bars + xlabels
+                    `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Aktivierungen (${RANGE_LABEL[data.range] || data.range})">`
+                    + grid + ylabels + bars + refills + xlabels
                     + `<line class="grid-line" x1="${padL}" y1="${yBase}" x2="${W - padR}" y2="${yBase}" style="opacity:.7"></line></svg>`;
             }
 

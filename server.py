@@ -153,44 +153,112 @@ def init_db():
 
 
 def log_activation(kind="manual"):
+    """Aktivierung loggen; liefert die Zeilen-ID fuer den Dauer-Nachtrag."""
     if not _db_ok:
-        return
+        return None
     try:
         with _db_lock:
             conn = _db_conn()
             with conn.cursor() as c:
                 c.execute("INSERT INTO fog_activations (type) VALUES (%s)", (kind,))
+                return c.lastrowid
     except Exception as e:
         print(f"❌ Failed to log activation: {e}")
+        return None
 
 
-def usage_analytics():
-    if not _db_ok:
-        return {"hourlyData": [], "peakHour": None}
+def log_activation_duration(act_id, dur_s):
+    """Gemessene ON-Dauer (2026-08-14) auf der Aktivierungszeile nachtragen —
+    die `duration`-Spalte existierte seit je, wurde aber nie befuellt. Damit
+    kann der Nutzungs-Chart Nebel-SEKUNDEN je Bucket zeigen, wo Daten da sind."""
+    if not _db_ok or act_id is None or dur_s <= 0:
+        return
     try:
         with _db_lock:
             conn = _db_conn()
             with conn.cursor() as c:
-                c.execute("""
-                    SELECT HOUR(timestamp) AS hour, COUNT(*) AS count
-                    FROM fog_activations
-                    WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-                    GROUP BY HOUR(timestamp) ORDER BY hour
-                """)
-                rows = {r["hour"]: r["count"] for r in c.fetchall()}
-                hourly = [{"hour": i, "count": rows.get(i, 0)} for i in range(24)]
-                c.execute("""
-                    SELECT HOUR(timestamp) AS hour, COUNT(*) AS count
-                    FROM fog_activations
-                    WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-                    GROUP BY HOUR(timestamp) ORDER BY count DESC LIMIT 1
-                """)
-                peak = c.fetchone()
-        return {"hourlyData": hourly,
-                "peakHour": f"{peak['hour']}:00" if peak else None}
+                c.execute("UPDATE fog_activations SET duration = %s WHERE id = %s",
+                          (int(round(dur_s)), act_id))
     except Exception as e:
-        print(f"❌ Failed to get analytics: {e}")
-        return {"hourlyData": [], "peakHour": None}
+        print(f"❌ Failed to log duration: {e}")
+
+
+USAGE_RANGES = {   # range-Key -> (Spanne s, Bucket s)
+    "1h": (3600, 300), "6h": (21600, 1800), "24h": (86400, 3600),
+    "7d": (604800, 21600), "30d": (2592000, 86400),
+}
+
+
+def usage_bucket_spec(range_key):
+    """Pure: (span_s, bucket_s) — unbekannte Keys fallen auf 24h."""
+    return USAGE_RANGES.get(range_key, USAGE_RANGES["24h"])
+
+
+def usage_refills_since(start_epoch):
+    """Nachfuell-Ereignisse ab start_epoch (SQLite) als Chart-Marker."""
+    out = []
+    with _tank_lock:
+        rows = _tank_conn().execute(
+            "SELECT ts, amount_added_ml FROM refills ORDER BY id DESC LIMIT 200"
+        ).fetchall()
+    # rows kommen juengste-zuerst (id DESC) — chronologisch iterieren, damit
+    # sekundengleiche Eintraege ihre echte Reihenfolge behalten (int-Sekunden
+    # + stabiler Sort wuerden sonst die DESC-Ordnung durchschlagen lassen)
+    for r in reversed(rows):
+        try:
+            t = datetime.datetime.fromisoformat(r["ts"]).timestamp()
+        except (ValueError, TypeError):
+            continue
+        if t >= start_epoch:
+            out.append({"t": int(t), "ml": r["amount_added_ml"]})
+    return out
+
+
+def usage_analytics(range_key="24h"):
+    """Chronologische Zeit-Buckets (2026-08-14 — die alte HOUR()-Gruppierung
+    sortierte nach TAGESSTUNDE, die X-Achse war gar nicht chronologisch).
+    Liefert lueckenlose Buckets + Nebel-Sekunden (wo geloggt) + Refills."""
+    span_s, bucket_s = usage_bucket_spec(range_key)
+    now = int(time.time())
+    start = now - span_s
+    counts = {}
+    if _db_ok:
+        try:
+            with _db_lock:
+                conn = _db_conn()
+                with conn.cursor() as c:
+                    c.execute("""
+                        SELECT FLOOR(UNIX_TIMESTAMP(timestamp) / %s) AS b,
+                               COUNT(*) AS n, SUM(COALESCE(duration, 0)) AS fs
+                        FROM fog_activations
+                        WHERE timestamp >= FROM_UNIXTIME(%s)
+                        GROUP BY b
+                    """, (bucket_s, start))
+                    for r in c.fetchall():
+                        counts[int(r["b"])] = (int(r["n"]), int(r["fs"] or 0))
+                    c.execute("""
+                        SELECT HOUR(timestamp) AS hour, COUNT(*) AS count
+                        FROM fog_activations
+                        WHERE timestamp >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                        GROUP BY HOUR(timestamp) ORDER BY count DESC LIMIT 1
+                    """)
+                    peak = c.fetchone()
+        except Exception as e:
+            print(f"❌ Failed to get analytics: {e}")
+            peak = None
+    else:
+        peak = None
+    b0 = start // bucket_s + 1          # erster VOLLER Bucket im Fenster
+    b1 = now // bucket_s
+    buckets = []
+    for b in range(b0, b1 + 1):
+        n, fs = counts.get(b, (0, 0))
+        buckets.append({"t": b * bucket_s, "count": n, "fog_s": fs})
+    return {"range": range_key if range_key in USAGE_RANGES else "24h",
+            "bucket_s": bucket_s,
+            "buckets": buckets,
+            "refills": usage_refills_since(start),
+            "peakHour": f"{peak['hour']}:00" if peak else None}
 
 
 # ---- tank / fluid tracking (SQLite, self-calibrating) -----------------------
@@ -346,15 +414,21 @@ def _fog_pending_s(now=None):
     return min(max(0.0, (now or time.time()) - _fog_on_ts), FOG_BURST_CAP_S)
 
 
+_last_act_id = None
+
+
 def _book_fog_time(now=None):
-    """ON-Phase abschliessen: Sekunden kumulativ (config) + Zyklus (tank)."""
-    global _fog_on_ts
+    """ON-Phase abschliessen: Sekunden kumulativ (config) + Zyklus (tank)
+    + Dauer-Nachtrag auf der Aktivierungszeile (Chart-Tooltip)."""
+    global _fog_on_ts, _last_act_id
     if _fog_on_ts is None:
         return 0.0
     dur = _fog_pending_s(now)
     _fog_on_ts = None
     config["fogSecondsTotal"] = float(config.get("fogSecondsTotal", 0.0)) + dur
     tank_bump_seconds(dur)
+    log_activation_duration(_last_act_id, dur)
+    _last_act_id = None
     return dur
 
 
@@ -439,7 +513,7 @@ def execute_command(command, kind="manual"):
         raise ValueError('Invalid command. Must be "on" or "off"')
     _rf_send(command)
     config["lastCommand"] = command
-    global _fog_on_ts
+    global _fog_on_ts, _last_act_id
     if command == "on":
         _book_fog_time()               # Auto-Wiederholung: alten Burst buchen
         _fog_on_ts = time.time()
@@ -447,7 +521,7 @@ def execute_command(command, kind="manual"):
         config["lastActivated"] = datetime.datetime.now(
             datetime.timezone.utc).isoformat()
         config["activationCount"] += 1
-        log_activation(kind)
+        _last_act_id = log_activation(kind)
         tank_bump_activation()
     else:
         _book_fog_time()
@@ -535,20 +609,38 @@ def refill_cal_state():
     return st
 
 
-def refill_cal_start(capacity_ml=None):
+def refill_cal_start(capacity_ml=None, resume=False):
     """User confirms the tank is BRIM-FULL right now; the optional capacity
     value updates the reference for "randvoll" in the same step (the size is
     what unlocks the mechanism — without it "brim-full" means nothing)."""
     with _cal_lock:
         if _cal.get("phase") not in (None, "idle"):
             raise ValueError("Kalibrierung läuft bereits")
-    if capacity_ml is not None and str(capacity_ml).strip() != "":
+    # ⚠️ Bei resume KEIN capacity-Set: tank_set_capacity nullt den Zyklus-
+    # Zaehler — genau die Basis, aus der der Lauf rekonstruiert wird.
+    if not resume and capacity_ml is not None and str(capacity_ml).strip() != "":
         tank_set_capacity(float(capacity_ml))   # clamps 50..5000 + persists
     cap = tank_state()["capacity_ml"]
     if not cap or cap <= 0:
         raise ValueError("Erst die Tankgröße angeben — sie ist die Referenz "
                          "für „randvoll“")
     _book_fog_time()   # offene ON-Phase gehoert noch zum ALTEN Zyklus
+    if resume:
+        # Wiederaufnahme nach Service-Restart (der Cal-Zustand ist in-memory):
+        # der Lauf laesst sich aus den Zyklus-Zaehlern SEIT dem letzten
+        # Randvoll-Buchen verlustfrei rekonstruieren — Level NICHT neu buchen
+        # (der Tank ist nicht mehr randvoll, der Stand stimmt bereits).
+        with _tank_lock:
+            row = _tank_conn().execute("SELECT * FROM tank WHERE id = 1").fetchone()
+        with _cal_lock:
+            _cal.clear()
+            _cal.update({
+                "phase": "fogging",
+                "acts0": config["activationCount"] - row["activations_since_refill"],
+                "secs0": float(config.get("fogSecondsTotal", 0.0))
+                         - (row["seconds_since_refill"] or 0.0),
+                "t0": time.time(), "capacity_ml": cap})
+        return refill_cal_state()
     # Der Start-Schritt bestaetigt einen FAKT ("Tank ist randvoll") — der
     # wird sofort gebucht, sonst zeigte die Anzeige bis zum Abschluss den
     # alten (falschen) Stand. Ein Abort verwirft nur die MESSUNG; der
@@ -713,11 +805,11 @@ def fog_custom():
 @app.route("/api/analytics/usage")
 def analytics_usage():
     try:
-        return jsonify(success=True, **usage_analytics())
+        return jsonify(success=True,
+                       **usage_analytics(request.args.get("range", "24h")))
     except Exception as e:
         return jsonify(success=False, error="Failed to get analytics",
                        details=str(e)), 500
-
 
 @app.route("/api/tank")
 def tank_get():
@@ -778,7 +870,8 @@ def refill_cal_start_route():
     data = request.get_json(silent=True) or {}
     try:
         return jsonify(success=True,
-                       **refill_cal_start(data.get("capacity_ml")))
+                       **refill_cal_start(data.get("capacity_ml"),
+                                          resume=bool(data.get("resume"))))
     except (ValueError, TypeError) as e:
         return jsonify(success=False, error=str(e) or "Ungültige Eingabe"), 400
     except Exception as e:
