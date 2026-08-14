@@ -31,7 +31,8 @@ RF433 fog machine controller for Raspberry Pi with a modern web interface, auto-
 - **RF433 Control** — Trigger fog machines over 433 MHz RF signals via GPIO
 - **Web Interface** — Responsive MD3-Expressive dark-theme PWA with touch support and fog animation
 - **Auto-Fog** — Automatic activation at configurable intervals (5/15/30/60/120 min) with 1h auto-off
-- **Tank Fill-Level** — Vertical tank gauge with a **self-calibrating** ml-per-activation estimate (learns from your refill feedback); refill & tank-capacity entry in the GUI; persisted in a dedicated **SQLite** DB (`fog-tank.db`)
+- **Tank Fill-Level** — Vertical tank gauge; consumption model is **time-based** (exact on/off seconds, ml/s) once calibrated, with a self-learning ml-per-activation fallback; refill & tank-capacity entry in the GUI; persisted in a dedicated **SQLite** DB (`fog-tank.db`)
+- **Refill Calibration** — brim-full → fog normally (the Pi counts activations **and** exact on/off seconds) → refill to the brim and enter the ml: the measured ml/s replaces the estimate outright (guided dialog, state lives server-side)
 - **Usage Analytics** — MariaDB-backed 24h usage history (SVG chart) with peak-hour analysis
 - **REST API** — Full RESTful API for external integrations
 - **systemd Managed** — Auto-start, monitoring, and crash recovery
@@ -105,6 +106,10 @@ The web interface is available at `http://<pi-ip>:5003`. In production it runs a
 | `POST` | `/api/tank/refill` | Log a refill: `{full}` and/or `{amount_ml, remaining_ml}` or `{was_empty}` → recalibrates |
 | `POST` | `/api/tank/config` | Set tank capacity: `{capacity_ml}` (50–5000) |
 | `GET` | `/api/tank/history` | Recent refills + calibration samples |
+| `GET` | `/api/tank/calibrate` | Refill-calibration state (idle/fogging + live counters) |
+| `POST` | `/api/tank/calibrate/start` | Tank is brim-full: book level + arm the measurement (`{capacity_ml}`) |
+| `POST` | `/api/tank/calibrate/finish` | Refilled to the brim: `{added_ml}` → ml/s + ml/activation replace the estimate |
+| `POST` | `/api/tank/calibrate/abort` | Discard the measurement (the brim level from start stays) |
 
 ### Tank fill-level & self-calibration
 
