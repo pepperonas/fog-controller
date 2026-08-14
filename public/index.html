@@ -676,7 +676,7 @@ h1,h2,h3{ text-wrap:balance; }
                     <div class="tank-actions">
                         <button class="btn btn-primary" id="tank-refill-btn" style="min-height:40px;"><span class="sh-i" data-sh-icon="droplet" aria-hidden="true"></span>Nachgefüllt</button>
                         <button class="btn btn-tonal" id="tank-capacity-btn" style="min-height:40px;"><span class="sh-i" data-sh-icon="gear" aria-hidden="true"></span>Tankgröße</button>
-                        <button class="btn btn-tonal" id="tank-calib-btn" style="min-height:40px;">⚖️ Kalibrieren</button>
+                        <button class="btn btn-tonal" id="tank-calib-btn" style="min-height:40px;">💧 Kalibrieren</button>
                     </div>
                 </div>
             </div>
@@ -746,63 +746,41 @@ h1,h2,h3{ text-wrap:balance; }
         </div>
     </div>
 
-    <!-- Waagen-Kalibrierung: gefuehrter Ablauf Wiegen -> Bursts -> Wiegen ->
-         Nachfuellen -> Wiegen. Zustand lebt im SERVER (api/tank/calibrate) —
-         Dialog zu / Seite neu geladen = Wiedereinstieg im richtigen Schritt. -->
+    <!-- Nachgiess-Kalibrierung: randvoll -> nebeln (Pi zaehlt) -> randvoll
+         nachfuellen + ml eingeben. Zustand lebt im SERVER (api/tank/calibrate)
+         — Dialog zu / Seite neu geladen = Wiedereinstieg im richtigen Schritt. -->
     <div class="dialog-backdrop" id="calib-dialog">
         <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="calib-title">
-            <h3 id="calib-title">⚖️ Verbrauch kalibrieren</h3>
+            <h3 id="calib-title">💧 Verbrauch kalibrieren (Nachgießen)</h3>
             <div id="calib-error" class="hint" style="display:none;color:var(--accent-red,#ff6b6b);font-weight:600;"></div>
             <div id="calib-step-setup">
-                <p class="hint">Misst den echten Verbrauch je Nebelstoß mit einer Waage.
-                    Maschine <b>aufheizen lassen</b>, auf die Waage stellen und während der
-                    Kalibrierung <b>nicht anderweitig nebeln</b>. 1 g ≈ 1 ml.</p>
-                <div class="field">
-                    <label for="calib-g0">Startgewicht der Maschine (g)</label>
-                    <input type="number" id="calib-g0" min="1" step="1" placeholder="z. B. 2450" inputmode="decimal">
-                </div>
-                <div class="field">
-                    <label for="calib-bursts">Nebelstöße (1–20)</label>
-                    <input type="number" id="calib-bursts" min="1" max="20" step="1" value="5">
-                </div>
+                <p class="hint">Tank jetzt <b>randvoll</b> machen, dann normal nebeln
+                    (App oder Auto) — der Pi zählt mit. Später wieder randvoll
+                    nachfüllen und die Menge eintragen.<br>
+                    <b>Tipp:</b> beim Randvoll-Machen mit Messbecher füllen — so kennst
+                    du die exakte Tankgröße gleich mit.<br>
+                    ⚠️ Nebel über die <b>Funk-Fernbedienung der Maschine</b> sieht der
+                    Pi nicht — während der Kalibrierung nur über App/Auto nebeln.</p>
                 <div class="field" style="margin-bottom:0;">
-                    <label for="calib-gap">Abstand zwischen Stößen (Sekunden, 3–120)</label>
-                    <input type="number" id="calib-gap" min="3" max="120" step="1" value="10">
+                    <label for="calib-cap">Tankgröße (ml) — Referenz für „randvoll“</label>
+                    <input type="number" id="calib-cap" min="50" max="5000" step="10" placeholder="z. B. 250" inputmode="decimal">
                 </div>
                 <div class="dialog-row">
                     <button class="btn btn-tonal" id="calib-cancel-setup" style="min-height:40px;">Abbrechen</button>
-                    <button class="btn btn-primary" id="calib-start" style="min-height:40px;">Messlauf starten</button>
+                    <button class="btn btn-primary" id="calib-start" style="min-height:40px;">Tank ist randvoll — Start</button>
                 </div>
             </div>
-            <div id="calib-step-burn" style="display:none;">
-                <p class="hint">Nebelstöße laufen — Maschine auf der Waage lassen.</p>
-                <div class="tank-pct" style="font-size:1.6rem;"><span id="calib-burn-n">–</span></div>
-                <div class="hint" id="calib-burn-next"></div>
-                <div class="dialog-row">
-                    <button class="btn btn-danger" id="calib-abort-burn" style="min-height:40px;">Messlauf abbrechen</button>
-                </div>
-            </div>
-            <div id="calib-step-weigh" style="display:none;">
-                <p class="hint">Fertig genebelt. Jetzt die Maschine <b>wiegen</b> und das Gewicht eintragen.</p>
-                <div class="field" style="margin-bottom:0;">
-                    <label for="calib-g1">Gewicht nach dem Nebeln (g)</label>
-                    <input type="number" id="calib-g1" min="1" step="1" placeholder="z. B. 2390" inputmode="decimal">
+            <div id="calib-step-fogging" style="display:none;">
+                <p class="hint">Läuft — normal über App oder Auto-Fog nebeln.
+                    Der Dialog darf zu, die Messung läuft weiter.</p>
+                <div class="tank-pct" style="font-size:1.6rem;"><span id="calib-acts">–</span></div>
+                <div class="hint" id="calib-elapsed"></div>
+                <div class="field" style="margin-top:var(--spacing-3);margin-bottom:0;">
+                    <label for="calib-added">Jetzt wieder randvoll: nachgefüllte Menge (ml)</label>
+                    <input type="number" id="calib-added" min="1" step="1" placeholder="z. B. 80" inputmode="decimal">
                 </div>
                 <div class="dialog-row">
-                    <button class="btn btn-tonal" id="calib-abort-weigh" style="min-height:40px;">Abbrechen</button>
-                    <button class="btn btn-primary" id="calib-weigh" style="min-height:40px;">Weiter</button>
-                </div>
-            </div>
-            <div id="calib-step-refill" style="display:none;">
-                <p class="hint">Gemessen: <b id="calib-consumed">–</b> ml über
-                    <b id="calib-bursts-done">–</b> Stöße = <b id="calib-sample">–</b> ml je Stoß.<br>
-                    Jetzt <b>nachfüllen</b>, dann die Maschine erneut wiegen.</p>
-                <div class="field" style="margin-bottom:0;">
-                    <label for="calib-g2">Gewicht nach dem Nachfüllen (g)</label>
-                    <input type="number" id="calib-g2" min="1" step="1" placeholder="z. B. 2500" inputmode="decimal">
-                </div>
-                <div class="dialog-row">
-                    <button class="btn btn-tonal" id="calib-abort-refill" style="min-height:40px;">Abbrechen</button>
+                    <button class="btn btn-danger" id="calib-abort" style="min-height:40px;">Abbrechen</button>
                     <button class="btn btn-primary" id="calib-finish" style="min-height:40px;">Kalibrierung abschließen</button>
                 </div>
             </div>
@@ -1034,26 +1012,18 @@ h1,h2,h3{ text-wrap:balance; }
                     capacityInput: document.getElementById('capacity-input'),
                     capacityCancel: document.getElementById('capacity-cancel'),
                     capacityConfirm: document.getElementById('capacity-confirm'),
-                    // scale calibration
+                    // refill calibration (Nachgiessen)
                     tankCalibBtn: document.getElementById('tank-calib-btn'),
                     calibDialog: document.getElementById('calib-dialog'),
                     calibError: document.getElementById('calib-error'),
                     calibSteps: {
                         setup: document.getElementById('calib-step-setup'),
-                        burning: document.getElementById('calib-step-burn'),
-                        weigh: document.getElementById('calib-step-weigh'),
-                        refill: document.getElementById('calib-step-refill')
+                        fogging: document.getElementById('calib-step-fogging')
                     },
-                    calibG0: document.getElementById('calib-g0'),
-                    calibBursts: document.getElementById('calib-bursts'),
-                    calibGap: document.getElementById('calib-gap'),
-                    calibBurnN: document.getElementById('calib-burn-n'),
-                    calibBurnNext: document.getElementById('calib-burn-next'),
-                    calibG1: document.getElementById('calib-g1'),
-                    calibG2: document.getElementById('calib-g2'),
-                    calibConsumed: document.getElementById('calib-consumed'),
-                    calibBurstsDone: document.getElementById('calib-bursts-done'),
-                    calibSample: document.getElementById('calib-sample')
+                    calibCap: document.getElementById('calib-cap'),
+                    calibActs: document.getElementById('calib-acts'),
+                    calibElapsed: document.getElementById('calib-elapsed'),
+                    calibAdded: document.getElementById('calib-added')
                 };
                 this._calibPoll = null;
                 this._capacity = 250;     // last known, for the capacity dialog default
@@ -1090,15 +1060,13 @@ h1,h2,h3{ text-wrap:balance; }
                 this.elements.capacityCancel.addEventListener('click', () => this.closeDialog(this.elements.capacityDialog));
                 this.elements.capacityConfirm.addEventListener('click', () => this.submitCapacity());
 
-                // Scale calibration: dialog close ≠ abort — der Messlauf lebt
-                // im Server; nur die Abbrechen-Buttons brechen ihn wirklich ab.
+                // Nachgiess-Kalibrierung: Dialog zu ≠ Abbruch — die Messung
+                // lebt im Server; nur „Abbrechen“ bricht sie wirklich ab.
                 this.elements.tankCalibBtn.addEventListener('click', () => this.openCalib());
                 document.getElementById('calib-start').addEventListener('click', () => this.calibStart());
-                document.getElementById('calib-weigh').addEventListener('click', () => this.calibWeigh());
                 document.getElementById('calib-finish').addEventListener('click', () => this.calibFinish());
                 document.getElementById('calib-cancel-setup').addEventListener('click', () => this.closeCalib());
-                ['calib-abort-burn', 'calib-abort-weigh', 'calib-abort-refill'].forEach(id =>
-                    document.getElementById(id).addEventListener('click', () => this.calibAbort()));
+                document.getElementById('calib-abort').addEventListener('click', () => this.calibAbort());
 
                 // Backdrop click + Esc close any dialog
                 [this.elements.refillDialog, this.elements.capacityDialog].forEach(d => {
@@ -1446,6 +1414,14 @@ h1,h2,h3{ text-wrap:balance; }
                 // Seite neu geladen ändert daran nichts)
                 let st = { phase: 'idle' };
                 try { st = await (await fetch('api/tank/calibrate')).json(); } catch (e) {}
+                if ((st.phase || 'idle') === 'idle') {
+                    // Tankgröße vorbefüllen (Default 250 ml — Katomi-500W-Klasse,
+                    // keine offizielle Herstellerangabe; überschreibbar)
+                    try {
+                        const t = await (await fetch('api/tank')).json();
+                        if (t && t.capacity_ml) this.elements.calibCap.value = Math.round(t.capacity_ml);
+                    } catch (e) {}
+                }
                 this._calibRender(st);
                 this.openDialog(this.elements.calibDialog);
                 this._calibStartPolling();
@@ -1461,16 +1437,14 @@ h1,h2,h3{ text-wrap:balance; }
                 if (st && st.error) this._calibError(st.error);
                 if (phase === 'idle') { this._calibShowStep('setup'); return; }
                 this._calibShowStep(phase);
-                if (phase === 'burning') {
-                    this.elements.calibBurnN.textContent =
-                        `Stoß ${st.done} von ${st.bursts}`;
-                    this.elements.calibBurnNext.textContent =
-                        st.done < st.bursts && st.next_in_s != null
-                            ? `nächster in ${Math.ceil(st.next_in_s)} s` : '';
-                } else if (phase === 'refill') {
-                    this.elements.calibConsumed.textContent = st.consumed_ml ?? '–';
-                    this.elements.calibBurstsDone.textContent = st.bursts ?? '–';
-                    this.elements.calibSample.textContent = st.sample_ml ?? '–';
+                if (phase === 'fogging') {
+                    const n = st.acts ?? 0;
+                    this.elements.calibActs.textContent =
+                        `${n} Aktivierung${n === 1 ? '' : 'en'}`;
+                    const s = Math.max(0, st.elapsed_s ?? 0);
+                    const mm = Math.floor(s / 60), ss = String(s % 60).padStart(2, '0');
+                    this.elements.calibElapsed.textContent =
+                        `seit Start: ${mm}:${ss} min · Tankgröße ${Math.round(st.capacity_ml)} ml`;
                 }
             }
 
@@ -1480,7 +1454,7 @@ h1,h2,h3{ text-wrap:balance; }
                     if (!this.elements.calibDialog.classList.contains('show')) return;
                     try {
                         const st = await (await fetch('api/tank/calibrate')).json();
-                        if (st.phase === 'burning' || st.phase === 'weigh') this._calibRender(st);
+                        if (st.phase === 'fogging') this._calibRender(st);
                     } catch (e) {}
                 }, 1000);
             }
@@ -1507,32 +1481,24 @@ h1,h2,h3{ text-wrap:balance; }
             }
 
             async calibStart() {
-                const g0 = parseFloat(this.elements.calibG0.value);
-                if (isNaN(g0) || g0 <= 0) { this._calibError('Startgewicht eingeben'); return; }
-                const st = await this._calibPost('api/tank/calibrate/start', {
-                    weight_g: g0,
-                    bursts: parseInt(this.elements.calibBursts.value, 10) || 5,
-                    gap_s: parseFloat(this.elements.calibGap.value) || 10
-                });
-                if (st) this._calibRender(st);
-            }
-
-            async calibWeigh() {
-                const g1 = parseFloat(this.elements.calibG1.value);
-                if (isNaN(g1) || g1 <= 0) { this._calibError('Gewicht eingeben'); return; }
-                const st = await this._calibPost('api/tank/calibrate/weigh', { weight_g: g1 });
+                const cap = parseFloat(this.elements.calibCap.value);
+                if (isNaN(cap) || cap <= 0) {
+                    this._calibError('Tankgröße eingeben — sie ist die Referenz für „randvoll“');
+                    return;
+                }
+                const st = await this._calibPost('api/tank/calibrate/start', { capacity_ml: cap });
                 if (st) this._calibRender(st);
             }
 
             async calibFinish() {
-                const g2 = parseFloat(this.elements.calibG2.value);
-                if (isNaN(g2) || g2 <= 0) { this._calibError('Gewicht eingeben'); return; }
-                const st = await this._calibPost('api/tank/calibrate/finish', { weight_g: g2 });
+                const ml = parseFloat(this.elements.calibAdded.value);
+                if (isNaN(ml) || ml <= 0) { this._calibError('Nachgefüllte Menge in ml eingeben'); return; }
+                const st = await this._calibPost('api/tank/calibrate/finish', { added_ml: ml });
                 if (!st) return;
                 this.renderTank(st);
                 this.closeCalib();
-                this.showMessage(`Kalibriert: ${st.ml_per_activation} ml je Stoß `
-                    + `(vorher ${st.ml_per_activation_old}) · Tank ${Math.round(st.level_ml)} ml`,
+                this.showMessage(`Kalibriert: ${st.ml_per_activation} ml je Stoß über ${st.acts} Aktivierungen `
+                    + `(vorher ${st.ml_per_activation_old}) · Tank randvoll (${Math.round(st.level_ml)} ml)`,
                     'success');
             }
 

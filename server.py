@@ -415,168 +415,129 @@ def stop_auto_fog():
         auto["_stop"].set()
 
 
-# ---- scale calibration (2026-08-13) -----------------------------------------
-# Weigh-based ground truth for ml_per_activation: weigh the machine (G0),
-# fire M single bursts second-accurately (the same discrete unit the tank
-# model counts — auto-fog only ever sends "on"), weigh again (G1), refill,
-# weigh once more (G2).  consumed = G0-G1, per-burst sample = consumed/M,
-# refilled = G2-G1.  1 g ≈ 1 ml (fog fluid ~1.03 g/ml — below scale noise).
-# The sample REPLACES the EWMA estimate outright: a scale measurement is
-# ground truth, not feedback to be blended with guesses.  State is in-memory
-# only (an aborted run writes nothing; the bursts it fired are counted as
-# normal activations and the old model absorbs them).
-_SCALE_MIN_SAMPLE = 0.5                # ml/burst — below: implausible reading
-_SCALE_MAX_SAMPLE = 200.0
-_scale_lock = threading.Lock()
-_scale = {"phase": "idle"}             # idle|burning|weigh|refill (+ fields)
+# ---- refill calibration (Nachgiess-Kalibrierung, 2026-08-14) -----------------
+# Replaces the scale flow (git history has it): fill the tank to the BRIM,
+# fog normally through the app/auto for a while (the controller counts its
+# own activations), then refill to the brim again and enter the refilled ml.
+# sample = ml / activations REPLACES the EWMA estimate outright (a measured
+# top-up is ground truth, not feedback to be blended), and the level is set
+# to the capacity — brim-full is the whole point of the method: the SAME
+# reproducible reference at both ends, no kitchen scale, the machine stays
+# in place (220 V, hot, cabled — lifting it onto a scale was the old flow's
+# weak spot).  ⚠️ The machine's own RF remote is INVISIBLE to the Pi — fog
+# triggered with it is consumed but not counted, so the GUI warns and the
+# plausibility check calls it out.  State is in-memory only (an aborted run
+# writes nothing; the bursts it fired were counted as normal activations and
+# the old model absorbs them).  The cumulative config["activationCount"] is
+# the counter snapshot — no extra hook in the activation path needed, and a
+# normal /api/tank/refill during a run cannot corrupt it (that only resets
+# the per-cycle counter).
+_CAL_MIN_SAMPLE = 0.5                  # ml/activation — below: implausible
+_CAL_MAX_SAMPLE = 200.0
+_CAL_MIN_ACTS = 3                      # fewer bursts = no trustworthy sample
+_cal_lock = threading.Lock()
+_cal = {"phase": "idle"}               # idle|fogging (+ fields)
 
 
-def scale_cal_compute(g0, g1, g2, bursts):
-    """Pure math + validation: (consumed_ml, sample_ml, added_ml).
+def refill_cal_compute(added_ml, acts, capacity_ml):
+    """Pure math + validation: sample ml/activation.
 
     Raises ValueError with a user-facing German message — the GUI shows it
     verbatim, so no silent garbage calibration can happen."""
-    g0, g1, g2 = float(g0), float(g1), float(g2)
-    bursts = int(bursts)
-    if bursts < 1:
-        raise ValueError("Mindestens 1 Burst nötig")
-    consumed = g0 - g1
-    if consumed <= 0:
-        raise ValueError("Kein Verbrauch messbar (Gewicht nach dem Nebeln "
-                         "ist nicht kleiner als vorher) — Waage prüfen")
-    sample = consumed / bursts
-    if not (_SCALE_MIN_SAMPLE <= sample <= _SCALE_MAX_SAMPLE):
-        raise ValueError(f"Unplausibler Verbrauch ({sample:.1f} ml je Burst) "
-                         "— Messwerte prüfen")
-    added = g2 - g1
-    if added < 0:
-        raise ValueError("Gewicht nach dem Nachfüllen ist kleiner als davor "
-                         "— Messwerte prüfen")
-    return consumed, sample, added
+    added_ml = float(added_ml)
+    acts = int(acts)
+    capacity_ml = float(capacity_ml)
+    if acts < _CAL_MIN_ACTS:
+        raise ValueError(
+            f"Nur {acts} Aktivierung(en) seit dem Start — für eine belastbare "
+            f"Zahl braucht es mindestens {_CAL_MIN_ACTS}. Einfach weiter über "
+            "App oder Auto-Fog nebeln und dann abschließen.")
+    if added_ml <= 0:
+        raise ValueError("Nachgefüllte Menge muss größer als 0 ml sein")
+    if added_ml > capacity_ml:
+        raise ValueError(
+            f"{added_ml:.0f} ml nachgefüllt, aber der Tank fasst nur "
+            f"{capacity_ml:.0f} ml — Tankgröße prüfen oder Eingabe "
+            "korrigieren")
+    sample = added_ml / acts
+    if not (_CAL_MIN_SAMPLE <= sample <= _CAL_MAX_SAMPLE):
+        raise ValueError(
+            f"Unplausibler Verbrauch ({sample:.1f} ml je Aktivierung) — "
+            "wurde zwischendurch mit der Funk-Fernbedienung der Maschine "
+            "genebelt? Die sieht der Pi nicht; nur App-/Auto-Nebel zählt.")
+    return sample
 
 
-def scale_cal_state():
-    with _scale_lock:
-        st = dict(_scale)
-    if st.get("phase") == "burning" and st.get("next_at"):
-        st["next_in_s"] = max(0.0, round(st["next_at"] - time.time(), 1))
-        st.pop("next_at", None)
-    st.pop("_stop", None)
+def refill_cal_state():
+    with _cal_lock:
+        st = dict(_cal)
+    if st.get("phase") == "fogging":
+        st["acts"] = max(0, config["activationCount"] - st.pop("acts0"))
+        st["elapsed_s"] = max(0, int(time.time() - st.pop("t0")))
     return st
 
 
-def scale_cal_start(weight_g, bursts, gap_s):
-    weight_g = float(weight_g)
-    bursts = max(1, min(20, int(bursts)))
-    gap_s = max(3.0, min(120.0, float(gap_s)))
-    with _scale_lock:
-        if _scale.get("phase") not in (None, "idle"):
+def refill_cal_start(capacity_ml=None):
+    """User confirms the tank is BRIM-FULL right now; the optional capacity
+    value updates the reference for "randvoll" in the same step (the size is
+    what unlocks the mechanism — without it "brim-full" means nothing)."""
+    with _cal_lock:
+        if _cal.get("phase") not in (None, "idle"):
             raise ValueError("Kalibrierung läuft bereits")
-        stop = threading.Event()
-        _scale.clear()
-        _scale.update({
-            "phase": "burning", "g0": weight_g, "bursts": bursts,
-            "gap_s": gap_s, "done": 0, "next_at": time.time(),
-            "level_start": tank_state()["level_ml"], "_stop": stop,
-        })
-
-    def _burn():
-        # First burst immediately, then one every gap_s — Event.wait gives
-        # the second-accurate spacing without blocking a request thread.
-        for i in range(bursts):
-            if stop.is_set():
-                return
-            try:
-                execute_command("on", "calib")
-            except Exception as e:
-                with _scale_lock:
-                    _scale.clear()
-                    _scale.update({"phase": "idle",
-                                   "error": f"Burst {i + 1} fehlgeschlagen: {e}"})
-                return
-            with _scale_lock:
-                if _scale.get("phase") != "burning":
-                    return
-                _scale["done"] = i + 1
-                _scale["next_at"] = time.time() + gap_s
-            if i + 1 < bursts and stop.wait(gap_s):
-                return
-        with _scale_lock:
-            if _scale.get("phase") == "burning":
-                _scale["phase"] = "weigh"
-                _scale.pop("next_at", None)
-
-    threading.Thread(target=_burn, daemon=True).start()
-    return scale_cal_state()
+    if capacity_ml is not None and str(capacity_ml).strip() != "":
+        tank_set_capacity(float(capacity_ml))   # clamps 50..5000 + persists
+    cap = tank_state()["capacity_ml"]
+    if not cap or cap <= 0:
+        raise ValueError("Erst die Tankgröße angeben — sie ist die Referenz "
+                         "für „randvoll“")
+    with _cal_lock:
+        _cal.clear()
+        _cal.update({"phase": "fogging", "acts0": config["activationCount"],
+                     "t0": time.time(), "capacity_ml": cap})
+    return refill_cal_state()
 
 
-def scale_cal_weigh(weight_g):
-    """G1 after the burn: lock in the measured consumption."""
-    weight_g = float(weight_g)
-    with _scale_lock:
-        if _scale.get("phase") != "weigh":
-            raise ValueError("Kein Messlauf im Wiege-Schritt")
-        consumed = _scale["g0"] - weight_g
-        sample = consumed / _scale["bursts"]
-        if consumed <= 0:
-            raise ValueError("Kein Verbrauch messbar (Gewicht nicht kleiner "
-                             "als vorher) — Waage prüfen")
-        if not (_SCALE_MIN_SAMPLE <= sample <= _SCALE_MAX_SAMPLE):
-            raise ValueError(f"Unplausibler Verbrauch ({sample:.1f} ml je "
-                             "Burst) — Messwerte prüfen")
-        _scale.update({"phase": "refill", "g1": weight_g,
-                       "consumed_ml": round(consumed, 1),
-                       "sample_ml": round(sample, 2)})
-    return scale_cal_state()
-
-
-def scale_cal_finish(weight_g):
-    """G2 after refilling: commit calibration + refill atomically."""
-    weight_g = float(weight_g)
-    with _scale_lock:
-        if _scale.get("phase") != "refill":
-            raise ValueError("Kein Messlauf im Nachfüll-Schritt")
-        st = dict(_scale)
-    consumed, sample, added = scale_cal_compute(
-        st["g0"], st["g1"], weight_g, st["bursts"])
+def refill_cal_finish(added_ml):
+    """Refilled to the brim: commit calibration + refill atomically."""
+    with _cal_lock:
+        if _cal.get("phase") != "fogging":
+            raise ValueError("Keine laufende Kalibrierung")
+        st = dict(_cal)
+    acts = max(0, config["activationCount"] - st["acts0"])
+    cap = tank_state()["capacity_ml"]  # live — Größe kann im Lauf geändert sein
+    sample = refill_cal_compute(added_ml, acts, cap)
+    added = float(added_ml)
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     with _tank_lock:
         conn = _tank_conn()
         row = conn.execute("SELECT * FROM tank WHERE id = 1").fetchone()
         cap = row["capacity_ml"]
         old_mpa = row["ml_per_activation"]
-        # Absolute level from the run's snapshot + the two weighed deltas —
-        # self-consistent even if the estimate drifted before the run.
-        level_after = max(0.0, min(cap, st["level_start"] - consumed + added))
+        # Brim-full is the absolute reference: level = capacity, counter = 0.
         conn.execute(
             "UPDATE tank SET level_at_refill_ml = ?, activations_since_refill = 0, "
             "ml_per_activation = ?, calibrated = 1, last_refill_at = ? WHERE id = 1",
-            (level_after, sample, now))
+            (cap, sample, now))
         conn.execute(
             "INSERT INTO refills (ts, level_before_ml, remaining_ml, amount_added_ml, "
             "level_after_ml, activations_in_cycle, ml_per_act_sample, was_empty) "
             "VALUES (?,?,?,?,?,?,?,0)",
-            (now, round(st["level_start"], 1),
-             round(st["level_start"] - consumed, 1), round(added, 1),
-             round(level_after, 1), st["bursts"], round(sample, 3)))
+            (now, round(cap, 1), round(max(0.0, cap - added), 1),
+             round(added, 1), round(cap, 1), acts, round(sample, 3)))
         conn.commit()
-    with _scale_lock:
-        _scale.clear()
-        _scale.update({"phase": "idle"})
-    return {"consumed_ml": round(consumed, 1),
+    with _cal_lock:
+        _cal.clear()
+        _cal.update({"phase": "idle"})
+    return {"acts": acts, "added_ml": round(added, 1),
             "ml_per_activation_old": round(old_mpa, 2),
-            "ml_per_activation": round(sample, 2),
-            "added_ml": round(added, 1), **tank_state()}
+            "ml_per_activation": round(sample, 2), **tank_state()}
 
 
-def scale_cal_abort():
-    with _scale_lock:
-        stop = _scale.get("_stop")
-        _scale.clear()
-        _scale.update({"phase": "idle"})
-    if stop:
-        stop.set()
-    return scale_cal_state()
+def refill_cal_abort():
+    with _cal_lock:
+        _cal.clear()
+        _cal.update({"phase": "idle"})
+    return refill_cal_state()
 
 
 # ---- Flask app --------------------------------------------------------------
@@ -764,18 +725,16 @@ def tank_config_route():
 
 
 @app.route("/api/tank/calibrate", methods=["GET"])
-def scale_cal_state_route():
-    return jsonify(success=True, **scale_cal_state())
+def refill_cal_state_route():
+    return jsonify(success=True, **refill_cal_state())
 
 
 @app.route("/api/tank/calibrate/start", methods=["POST"])
-def scale_cal_start_route():
+def refill_cal_start_route():
     data = request.get_json(silent=True) or {}
     try:
         return jsonify(success=True,
-                       **scale_cal_start(data.get("weight_g"),
-                                         data.get("bursts", 5),
-                                         data.get("gap_s", 10)))
+                       **refill_cal_start(data.get("capacity_ml")))
     except (ValueError, TypeError) as e:
         return jsonify(success=False, error=str(e) or "Ungültige Eingabe"), 400
     except Exception as e:
@@ -783,20 +742,11 @@ def scale_cal_start_route():
                        details=str(e)), 500
 
 
-@app.route("/api/tank/calibrate/weigh", methods=["POST"])
-def scale_cal_weigh_route():
-    data = request.get_json(silent=True) or {}
-    try:
-        return jsonify(success=True, **scale_cal_weigh(data.get("weight_g")))
-    except (ValueError, TypeError) as e:
-        return jsonify(success=False, error=str(e) or "Ungültige Eingabe"), 400
-
-
 @app.route("/api/tank/calibrate/finish", methods=["POST"])
-def scale_cal_finish_route():
+def refill_cal_finish_route():
     data = request.get_json(silent=True) or {}
     try:
-        return jsonify(success=True, **scale_cal_finish(data.get("weight_g")))
+        return jsonify(success=True, **refill_cal_finish(data.get("added_ml")))
     except (ValueError, TypeError) as e:
         return jsonify(success=False, error=str(e) or "Ungültige Eingabe"), 400
     except Exception as e:
@@ -805,8 +755,8 @@ def scale_cal_finish_route():
 
 
 @app.route("/api/tank/calibrate/abort", methods=["POST"])
-def scale_cal_abort_route():
-    return jsonify(success=True, **scale_cal_abort())
+def refill_cal_abort_route():
+    return jsonify(success=True, **refill_cal_abort())
 
 
 @app.route("/api/tank/history")
