@@ -503,9 +503,9 @@ def stop_auto_fog():
 # in place (220 V, hot, cabled — lifting it onto a scale was the old flow's
 # weak spot).  ⚠️ The machine's own RF remote is INVISIBLE to the Pi — fog
 # triggered with it is consumed but not counted, so the GUI warns and the
-# plausibility check calls it out.  State is in-memory only (an aborted run
-# writes nothing; the bursts it fired were counted as normal activations and
-# the old model absorbs them).  The cumulative config["activationCount"] is
+# plausibility check calls it out.  Starting BOOKS the brim-full level at
+# once (it is a fact, not part of the measurement); an abort discards only
+# the measurement state (in-memory), never that level.  The cumulative config["activationCount"] is
 # the counter snapshot — no extra hook in the activation path needed, and a
 # normal /api/tank/refill during a run cannot corrupt it (that only resets
 # the per-cycle counter).
@@ -586,6 +586,17 @@ def refill_cal_start(capacity_ml=None):
         raise ValueError("Erst die Tankgröße angeben — sie ist die Referenz "
                          "für „randvoll“")
     _book_fog_time()   # offene ON-Phase gehoert noch zum ALTEN Zyklus
+    # Der Start-Schritt bestaetigt einen FAKT ("Tank ist randvoll") — der
+    # wird sofort gebucht, sonst zeigte die Anzeige bis zum Abschluss den
+    # alten (falschen) Stand. Ein Abort verwirft nur die MESSUNG; der
+    # Randvoll-Stand bleibt zu Recht stehen. Die Historien-Zeile kommt
+    # erst beim Finish (mit den gemessenen Samples).
+    with _tank_lock:
+        conn = _tank_conn()
+        conn.execute("UPDATE tank SET level_at_refill_ml = capacity_ml, "
+                     "activations_since_refill = 0, seconds_since_refill = 0 "
+                     "WHERE id = 1")
+        conn.commit()
     with _cal_lock:
         _cal.clear()
         _cal.update({"phase": "fogging", "acts0": config["activationCount"],

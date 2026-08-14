@@ -154,17 +154,29 @@ class RefillCalFlow(unittest.TestCase):
         server.refill_cal_finish(25)   # 5 ml/Stoss
         self.assertAlmostEqual(server.tank_state()["ml_per_activation"], 5.0)
 
-    def test_abort_writes_nothing(self):
+    def test_start_books_the_brim_level_immediately(self):
+        # "Tank ist randvoll" ist ein FAKT — die Anzeige darf nicht bis zum
+        # Abschluss den alten Stand zeigen
+        self._fog(5)   # Stand erst absenken (frische DB startet voll)
+        self.assertLess(server.tank_state()["level_ml"], 250.0)
+        server.refill_cal_start(250)
+        self.assertEqual(server.tank_state()["level_ml"], 250.0)
+
+    def test_abort_discards_only_the_measurement(self):
         before = server.tank_state()
         server.refill_cal_start(250)
         self._fog(5)
         server.refill_cal_abort()
         after = server.tank_state()
         self.assertEqual(server.refill_cal_state()["phase"], "idle")
+        # Samples/Kalibrier-Flag unangetastet …
         self.assertEqual(before["ml_per_activation"], after["ml_per_activation"])
         self.assertEqual(before["calibrated"], after["calibrated"])
-        # die 5 Bursts wurden normal gebucht (altes Modell absorbiert sie)
+        # … der Randvoll-Stand vom Start bleibt (Fakt), die 5 Bursts wurden
+        # normal gebucht und zaehlen ab randvoll
         self.assertEqual(after["activations_since_refill"], 5)
+        self.assertAlmostEqual(
+            after["level_ml"], 250.0 - 5 * after["ml_per_activation"], places=1)
 
     def test_finish_without_start_rejected(self):
         with self.assertRaises(ValueError):
