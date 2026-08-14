@@ -3,7 +3,7 @@
 > **⚡ Update 2026-06 — Tank-Füllstand, Stack & UI**
 >
 > - **Tank / Füllstand (neu):** Vertikale Tankanzeige mit **selbstlernender Verbrauchsschätzung**. Jede Aktivierung ist ein diskreter Fog-Burst; das System zählt die Bursts seit dem letzten Nachfüllen und kalibriert aus deinem Refill-Feedback (Tank war leer / Restmenge) den echten **ml-pro-Aktivierung**-Wert (EWMA). Der Live-Füllstand wird daraus berechnet. Persistenz in einer **eigenen SQLite-DB** (`fog-tank.db`) — getrennt von MariaDB, keine zusätzlichen Dependencies. Nachfüllen & Tankgröße direkt in der GUI.
-> - **Backend:** Python/**Flask** (migriert von Node/Express). RF433-Bit-Bang (`fog-controller.py`, **rpi-lgpio**/RPi.GPIO-API, GPIO 17; Pi 5-kompatibel) läuft **in-process als `pi`** (kein sudo/Subprozess), Usage-Logging via **PyMySQL** (MariaDB), Auto-Fog im Hintergrund-Thread. **systemd** `fog-controller`. ~35 MB. Sicherheit: Fog startet nie automatisch.
+> - **Backend:** Python/**Flask** (migriert von Node/Express). RF433-Bit-Bang (`fog-controller.py`, **rpi-lgpio**/RPi.GPIO-API, GPIO 17; Pi 5-kompatibel) läuft **in-process als `pi`** (kein sudo/Subprozess), Usage-Logging via **PyMySQL** (MariaDB). **systemd** `fog-controller`. ~35 MB. Sicherheit: Fog startet nie automatisch.
 > - **UI:** **Material Design 3 Expressive** + Spring-Animationen. Nutzungs-Chart als sauberes SVG (Achsen, Gridlines, Tooltips). Button-Texte mit MD3-„on-container"-Kontrast (dunkler Text auf hellen Akzentflächen). Favicon = 💨 (Dampf); alle Icon-/Manifest-Pfade relativ (laufen hinter dem `/app/fog/`-Reverse-Proxy).
 > - **Auto-Fog-Intervalle:** 5 / 15 / 30 / 60 / 120 min, 1 h Auto-Off.
 > - **Deploy:** `git pull && sudo systemctl restart fog-controller`
@@ -22,7 +22,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/pepperonas/fog-controller/pulls)
 [![Made with ❤️](https://img.shields.io/badge/Made%20with%20%E2%9D%A4%EF%B8%8F%20by-Martin%20Pfeffer-ff69b4.svg)](https://celox.io)
 
-RF433 fog machine controller for Raspberry Pi with a modern web interface, auto-fog scheduling, self-calibrating tank fill-level tracking, and usage analytics.
+RF433 fog machine controller for Raspberry Pi with a modern web interface, time-based tank fill-level tracking, and usage analytics.
 
 </div>
 
@@ -30,7 +30,6 @@ RF433 fog machine controller for Raspberry Pi with a modern web interface, auto-
 
 - **RF433 Control** — Trigger fog machines over 433 MHz RF signals via GPIO
 - **Web Interface** — Responsive MD3-Expressive dark-theme PWA with touch support and fog animation
-- **Auto-Fog** — Automatic activation at configurable intervals (5/15/30/60/120 min) with 1h auto-off
 - **Tank Fill-Level** — Vertical tank gauge; consumption model is **time-based** (exact on/off seconds, ml/s) once calibrated, with a self-learning ml-per-activation fallback; refill & tank-capacity entry in the GUI; persisted in a dedicated **SQLite** DB (`fog-tank.db`)
 - **Refill Calibration** — brim-full → fog normally (the Pi counts activations **and** exact on/off seconds) → refill to the brim and enter the ml: the measured ml/s replaces the estimate outright (guided dialog, state lives server-side)
 - **Usage Analytics** — MariaDB-backed 24h usage history (SVG chart) with peak-hour analysis
@@ -99,8 +98,6 @@ The web interface is available at `http://<pi-ip>:5003`. In production it runs a
 | `POST` | `/api/fog/on` | Turn fog on (counts as one activation/burst) |
 | `POST` | `/api/fog/off` | Turn fog off |
 | `POST` | `/api/fog/toggle` | Toggle fog |
-| `POST` | `/api/auto-fog/enable` | Enable auto-fog (`{interval: 5\|15\|30\|60\|120}`) |
-| `POST` | `/api/auto-fog/disable` | Disable auto-fog |
 | `GET` | `/api/analytics/usage` | 24h usage analytics (hourly + peak hour) |
 | `GET` | `/api/tank` | Tank state: level (ml/%), est. activations left, ml/activation, calibrated flag |
 | `POST` | `/api/tank/refill` | Log a refill: `{full}` and/or `{amount_ml, remaining_ml}` or `{was_empty}` → recalibrates |

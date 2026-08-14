@@ -370,16 +370,6 @@ class _TankHelpers(unittest.TestCase):
         self.assertAlmostEqual(seed, 20.0)
 
     # ------------------------------------------------------------------
-    # 12. Auto-fog auto-disable deadline (1 hour = 3600 s)
-    # ------------------------------------------------------------------
-
-    def test_auto_disable_is_one_hour(self):
-        import time
-        start = time.time()
-        disable_time = start + 3600
-        self.assertAlmostEqual(disable_time - start, 3600, delta=1)
-
-    # ------------------------------------------------------------------
     # 13. Edge: refill with remaining_ml clamped to [0, capacity]
     # ------------------------------------------------------------------
 

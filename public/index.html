@@ -601,28 +601,6 @@ h1,h2,h3{ text-wrap:balance; }
             </div>
         </div>
 
-        <!-- Auto-Fog Control -->
-        <div class="card">
-            <h2>Auto-Fog</h2>
-            <div style="display: flex; align-items: center; gap: var(--spacing-4); margin-bottom: var(--spacing-4);">
-                <label for="auto-fog-interval" style="font-weight: 500; color: var(--text-primary);">Intervall:</label>
-                <select id="auto-fog-interval" style="padding: var(--spacing-2) var(--spacing-3); border-radius: var(--radius); border: 1px solid rgba(255,255,255,0.2); background: var(--background-darker); color: var(--text-primary); font-size: 1rem;">
-                    <option value="0">Deaktiviert</option>
-                    <option value="5">Alle 5 Minuten</option>
-                    <option value="15">Alle 15 Minuten</option>
-                    <option value="30">Alle 30 Minuten</option>
-                    <option value="60">Alle 60 Minuten</option>
-                    <option value="120">Alle 120 Minuten</option>
-                </select>
-                <button class="btn btn-primary" id="auto-fog-toggle" style="min-height: 40px; padding: var(--spacing-2) var(--spacing-4);">
-                    <span>Aktivieren</span>
-                </button>
-            </div>
-            <div class="auto-fog-status" id="auto-fog-status" style="text-align: center; padding: var(--spacing-3); border-radius: var(--radius); background: var(--background-darker); color: var(--text-secondary);">
-                Auto-Fog ist deaktiviert
-            </div>
-        </div>
-
         <!-- Statistics -->
         <div class="card">
             <h2>Statistik</h2>
@@ -754,8 +732,8 @@ h1,h2,h3{ text-wrap:balance; }
             <h3 id="calib-title">💧 Verbrauch kalibrieren (Nachgießen)</h3>
             <div id="calib-error" class="hint" style="display:none;color:var(--accent-red,#ff6b6b);font-weight:600;"></div>
             <div id="calib-step-setup">
-                <p class="hint">Tank jetzt <b>randvoll</b> machen, dann normal nebeln
-                    (App oder Auto) — der Pi zählt mit. Später wieder randvoll
+                <p class="hint">Tank jetzt <b>randvoll</b> machen, dann normal über die App
+                    nebeln — der Pi zählt mit. Später wieder randvoll
                     nachfüllen und die Menge eintragen.<br>
                     <b>Tipp:</b> beim Randvoll-Machen mit Messbecher füllen — so kennst
                     du die exakte Tankgröße gleich mit.<br>
@@ -771,7 +749,7 @@ h1,h2,h3{ text-wrap:balance; }
                 </div>
             </div>
             <div id="calib-step-fogging" style="display:none;">
-                <p class="hint">Läuft — normal über App oder Auto-Fog nebeln.
+                <p class="hint">Läuft — normal über die App nebeln.
                     Der Dialog darf zu, die Messung läuft weiter.</p>
                 <div class="tank-pct" style="font-size:1.6rem;"><span id="calib-acts">–</span></div>
                 <div class="hint" id="calib-elapsed"></div>
@@ -967,11 +945,9 @@ h1,h2,h3{ text-wrap:balance; }
                 this.initializeElements();
                 this.attachEventListeners();
                 this.loadStatus();
-                this.loadAutoFogStatus();
                 this.loadTank();
                 // Auto-refresh status every 5 seconds
                 setInterval(() => this.loadStatus(), 5000);
-                setInterval(() => this.loadAutoFogStatus(), 10000);
                 setInterval(() => this.loadTank(), 5000);
             }
 
@@ -985,9 +961,6 @@ h1,h2,h3{ text-wrap:balance; }
                     activationCount: document.getElementById('activation-count'),
                     lastActivated: document.getElementById('last-activated'),
                     peakHour: document.getElementById('peak-hour'),
-                    autoFogInterval: document.getElementById('auto-fog-interval'),
-                    autoFogToggle: document.getElementById('auto-fog-toggle'),
-                    autoFogStatus: document.getElementById('auto-fog-status'),
                     usageChart: document.getElementById('usage-chart'),
                     message: document.getElementById('message'),
                     // tank
@@ -1037,8 +1010,6 @@ h1,h2,h3{ text-wrap:balance; }
                 // this.elements.forceOnBtn.addEventListener('click', () => this.turnOn());
                 this.elements.forceOffBtn.addEventListener('click', () => this.turnOff());
 
-                // Auto-fog controls
-                this.elements.autoFogToggle.addEventListener('click', () => this.toggleAutoFog());
 
                 // Tank: open dialogs
                 this.elements.tankRefillBtn.addEventListener('click', () => this.openRefill());
@@ -1198,93 +1169,7 @@ h1,h2,h3{ text-wrap:balance; }
                 }
             }
 
-            async loadAutoFogStatus() {
-                try {
-                    const response = await fetch('api/auto-fog/status');
-                    const data = await response.json();
-                    
-                    if (data.active) {
-                        this.elements.autoFogInterval.value = data.interval;
-                        this.elements.autoFogToggle.textContent = 'Deaktivieren';
-                        this.elements.autoFogToggle.className = 'btn btn-danger';
-                        
-                        const remaining = Math.max(0, Math.ceil((data.autoDisableTime - Date.now()) / 1000 / 60));
-                        this.elements.autoFogStatus.innerHTML = `
-                            <span style="color: var(--accent-green);">
-                                Auto-Fog aktiv (alle ${data.interval} Min)
-                            </span><br>
-                            <span style="font-size: 0.9em;">
-                                Automatisch deaktiviert in ${remaining} Min
-                            </span>
-                        `;
-                        this.elements.autoFogStatus.style.background = 'rgba(156, 182, 143, 0.1)';
-                    } else {
-                        this.elements.autoFogToggle.textContent = 'Aktivieren';
-                        this.elements.autoFogToggle.className = 'btn btn-primary';
-                        this.elements.autoFogStatus.textContent = 'Auto-Fog ist deaktiviert';
-                        this.elements.autoFogStatus.style.background = 'var(--background-darker)';
-                    }
-                } catch (error) {
-                    console.error('Failed to load auto-fog status:', error);
-                }
-            }
 
-            async toggleAutoFog() {
-                try {
-                    const interval = parseInt(this.elements.autoFogInterval.value);
-                    
-                    // Validate interval value
-                    if (isNaN(interval) || ![0, 5, 15, 30, 60, 120].includes(interval)) {
-                        this.showMessage('Ungültiges Intervall', 'error');
-                        return;
-                    }
-                    
-                    if (interval === 0) {
-                        // Disable auto-fog
-                        const response = await fetch('api/auto-fog/disable', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' }
-                        });
-                        
-                        if (!response.ok) {
-                            throw new Error('Server error');
-                        }
-                        
-                        const result = await response.json();
-                        
-                        if (result.success) {
-                            this.showMessage('Auto-Fog deaktiviert', 'info');
-                        } else {
-                            this.showMessage(result.error || 'Fehler beim Deaktivieren', 'error');
-                        }
-                    } else {
-                        // Enable auto-fog
-                        const response = await fetch('api/auto-fog/enable', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ interval: interval })
-                        });
-                        
-                        if (!response.ok) {
-                            throw new Error('Server error');
-                        }
-                        
-                        const result = await response.json();
-                        
-                        if (result.success) {
-                            this.showMessage(`Auto-Fog aktiviert (alle ${interval} Min)`, 'success');
-                        } else {
-                            this.showMessage(result.error || 'Fehler beim Aktivieren', 'error');
-                        }
-                    }
-                    
-                    // Refresh status
-                    setTimeout(() => this.loadAutoFogStatus(), 500);
-                } catch (error) {
-                    console.error('Auto-Fog toggle error:', error);
-                    this.showMessage('Verbindungsfehler', 'error');
-                }
-            }
 
             async loadTank() {
                 try {

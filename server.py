@@ -4,9 +4,9 @@ that shelled out sudo python3 per click).
 
 The proven RF433 bit-bang logic is reused verbatim from fog-controller.py
 (imported via importlib; RPi.GPIO works as the pi user via the gpio group, so no
-sudo/subprocess). DB logging via PyMySQL, auto-fog via a background thread.
+sudo/subprocess). DB logging via PyMySQL.
 API is byte-for-byte compatible with the old server.js (nginx /proxy/fog/ keeps
-working). SAFETY: fog is never auto-started at boot; auto-fog is opt-in and
+working). SAFETY: fog is never auto-started at boot
 self-disables after one hour, exactly as before.
 """
 
@@ -333,8 +333,8 @@ def tank_bump_seconds(s):
 # Exakte Zeit zwischen "on" und "off" — der Nutzerfrage geschuldet ("nimmst
 # du die zeit genau?"): vorher zaehlte nur die Aktivierung, ein 3-s- und ein
 # 30-s-Burst galten gleich. Gecappt bei FOG_BURST_CAP_S, weil die Maschine
-# einen Burst nach ~20 s SELBST beendet (Handbuch: "ca. 20 Sekunden") und
-# Auto-Fog nie "off" sendet — ohne Cap zaehlte ein vergessenes Off endlos.
+# einen Burst nach ~20 s SELBST beendet (Handbuch: "ca. 20 Sekunden") —
+# ohne Cap zaehlte ein vergessenes Off endlos.
 FOG_BURST_CAP_S = float(os.environ.get("FOG_BURST_CAP_S", "20"))
 _fog_on_ts = None
 
@@ -455,46 +455,9 @@ def execute_command(command, kind="manual"):
     save_config()
 
 
-# ---- auto-fog (background thread; self-disables after 1 h) -------------------
-auto = {"active": False, "interval": 5, "startTime": None,
-        "autoDisableTime": None, "_stop": None}
-
-
-def start_auto_fog(interval):
-    if auto["active"]:
-        return
-    auto["active"] = True
-    auto["interval"] = interval
-    auto["startTime"] = int(time.time() * 1000)
-    auto["autoDisableTime"] = int((time.time() + 3600) * 1000)
-    stop = threading.Event()
-    auto["_stop"] = stop
-
-    def loop():
-        deadline = time.time() + 3600          # auto-disable after 1 hour
-        while auto["active"] and not stop.wait(interval * 60):
-            if time.time() >= deadline:
-                break
-            try:
-                execute_command("on", "auto")
-            except Exception as e:
-                print(f"❌ Auto-Fog execution failed: {e}")
-        stop_auto_fog()
-
-    threading.Thread(target=loop, daemon=True).start()
-
-
-def stop_auto_fog():
-    auto["active"] = False
-    auto["startTime"] = None
-    auto["autoDisableTime"] = None
-    if auto.get("_stop"):
-        auto["_stop"].set()
-
-
 # ---- refill calibration (Nachgiess-Kalibrierung, 2026-08-14) -----------------
 # Replaces the scale flow (git history has it): fill the tank to the BRIM,
-# fog normally through the app/auto for a while (the controller counts its
+# fog normally through the app for a while (the controller counts its
 # own activations), then refill to the brim again and enter the refilled ml.
 # sample = ml / activations REPLACES the EWMA estimate outright (a measured
 # top-up is ground truth, not feedback to be blended), and the level is set
@@ -541,7 +504,7 @@ def refill_cal_compute(added_ml, acts, secs, capacity_ml):
             f"Zu wenig genebelt für eine belastbare Zahl (nur {acts} "
             f"Aktivierung(en), {secs:.0f} s Nebelzeit) — mindestens "
             f"{_CAL_MIN_ACTS} Aktivierungen oder {_CAL_MIN_FOG_S:.0f} s "
-            "über App/Auto nebeln, dann abschließen.")
+            "die App nebeln, dann abschließen.")
     mps = None
     if secs >= _CAL_MIN_FOG_S:
         mps = added_ml / secs
@@ -550,7 +513,7 @@ def refill_cal_compute(added_ml, acts, secs, capacity_ml):
                 f"Unplausibler Verbrauch ({mps:.2f} ml je Sekunde; die "
                 "500-W-Klasse liegt bei ~0,05–0,3) — wurde zwischendurch "
                 "mit der Funk-Fernbedienung der Maschine genebelt? Die "
-                "sieht der Pi nicht; nur App-/Auto-Nebel zählt.")
+                "sieht der Pi nicht; nur App-Nebel zählt.")
     sample = added_ml / acts if acts >= 1 else None
     if mps is None and sample is not None \
             and not (_CAL_MIN_SAMPLE <= sample <= _CAL_MAX_SAMPLE):
@@ -744,44 +707,6 @@ def fog_custom():
         return jsonify(success=True, message="Custom code sent successfully", code=code)
     except Exception as e:
         return jsonify(success=False, error="Failed to send custom code",
-                       details=str(e)), 500
-
-
-@app.route("/api/auto-fog/status")
-def auto_status():
-    return jsonify(active=auto["active"], interval=auto["interval"],
-                   startTime=auto["startTime"], autoDisableTime=auto["autoDisableTime"],
-                   timestamp=datetime.datetime.now(
-                       datetime.timezone.utc).isoformat())
-
-
-@app.route("/api/auto-fog/enable", methods=["POST"])
-def auto_enable():
-    data = request.get_json(silent=True) or {}
-    try:
-        interval = int(data.get("interval"))
-    except (TypeError, ValueError):
-        interval = None
-    if interval not in (5, 15, 30, 60, 120):
-        return jsonify(success=False,
-                       error="Invalid interval. Must be 5, 15, 30, 60, or 120 minutes"), 400
-    try:
-        start_auto_fog(interval)
-        return jsonify(success=True,
-                       message=f"Auto-Fog enabled with {interval} minute interval",
-                       interval=interval)
-    except Exception as e:
-        return jsonify(success=False, error="Failed to enable Auto-Fog",
-                       details=str(e)), 500
-
-
-@app.route("/api/auto-fog/disable", methods=["POST"])
-def auto_disable():
-    try:
-        stop_auto_fog()
-        return jsonify(success=True, message="Auto-Fog disabled")
-    except Exception as e:
-        return jsonify(success=False, error="Failed to disable Auto-Fog",
                        details=str(e)), 500
 
 
