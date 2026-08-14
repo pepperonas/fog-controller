@@ -1440,11 +1440,11 @@ h1,h2,h3{ text-wrap:balance; }
                 if (phase === 'fogging') {
                     const n = st.acts ?? 0;
                     this.elements.calibActs.textContent =
-                        `${n} Aktivierung${n === 1 ? '' : 'en'}`;
+                        `${n} Aktivierung${n === 1 ? '' : 'en'} · ${(st.fog_s ?? 0).toFixed(0)} s Nebel`;
                     const s = Math.max(0, st.elapsed_s ?? 0);
                     const mm = Math.floor(s / 60), ss = String(s % 60).padStart(2, '0');
                     this.elements.calibElapsed.textContent =
-                        `seit Start: ${mm}:${ss} min · Tankgröße ${Math.round(st.capacity_ml)} ml`;
+                        `seit Start: ${mm}:${ss} min · Tankgröße ${Math.round(st.capacity_ml)} ml · on/off-Zeit wird exakt gemessen`;
                 }
             }
 
@@ -1497,8 +1497,10 @@ h1,h2,h3{ text-wrap:balance; }
                 if (!st) return;
                 this.renderTank(st);
                 this.closeCalib();
-                this.showMessage(`Kalibriert: ${st.ml_per_activation} ml je Stoß über ${st.acts} Aktivierungen `
-                    + `(vorher ${st.ml_per_activation_old}) · Tank randvoll (${Math.round(st.level_ml)} ml)`,
+                const primary = st.ml_per_second != null
+                    ? `${st.ml_per_second} ml/s über ${st.fog_seconds} s Nebelzeit`
+                    : `${st.ml_per_activation} ml je Stoß über ${st.acts} Aktivierungen`;
+                this.showMessage(`Kalibriert: ${primary} · Tank randvoll (${Math.round(st.level_ml)} ml)`,
                     'success');
             }
 

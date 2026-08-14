@@ -83,6 +83,7 @@ DEFAULT_CONFIG = {
     "fogActive": False,
     "lastActivated": None,
     "activationCount": 0,
+    "fogSecondsTotal": 0.0,
 }
 _cfg_lock = threading.Lock()
 
@@ -226,7 +227,9 @@ def init_tank_db():
                 activations_since_refill INTEGER NOT NULL DEFAULT 0,
                 ml_per_activation REAL NOT NULL DEFAULT 10,
                 calibrated INTEGER NOT NULL DEFAULT 0,
-                last_refill_at TEXT
+                last_refill_at TEXT,
+                ml_per_second REAL,
+                seconds_since_refill REAL NOT NULL DEFAULT 0
             )
         """)
         conn.execute("""
@@ -239,9 +242,22 @@ def init_tank_db():
                 level_after_ml REAL,
                 activations_in_cycle INTEGER,
                 ml_per_act_sample REAL,
-                was_empty INTEGER NOT NULL DEFAULT 0
+                was_empty INTEGER NOT NULL DEFAULT 0,
+                fog_seconds_in_cycle REAL,
+                ml_per_s_sample REAL
             )
         """)
+        # Lazy-Migration fuer Bestands-DBs (2026-08-14: Zeit-Modell)
+        for ddl in (
+            "ALTER TABLE tank ADD COLUMN ml_per_second REAL",
+            "ALTER TABLE tank ADD COLUMN seconds_since_refill REAL NOT NULL DEFAULT 0",
+            "ALTER TABLE refills ADD COLUMN fog_seconds_in_cycle REAL",
+            "ALTER TABLE refills ADD COLUMN ml_per_s_sample REAL",
+        ):
+            try:
+                conn.execute(ddl)
+            except sqlite3.OperationalError:
+                pass   # Spalte existiert schon
         if conn.execute("SELECT id FROM tank WHERE id = 1").fetchone() is None:
             conn.execute(
                 "INSERT INTO tank (id, capacity_ml, level_at_refill_ml, "
@@ -251,8 +267,17 @@ def init_tank_db():
     print("💧 Tank SQLite DB ready")
 
 
-def _level_from_row(row):
-    lvl = row["level_at_refill_ml"] - row["activations_since_refill"] * row["ml_per_activation"]
+def _level_from_row(row, pending_s=0.0):
+    """Restpegel. Seit 2026-08-14 ZEIT-basiert, sobald ml_per_second
+    kalibriert ist (Nachgiessen mit on/off-Messung) — die Aktivierungs-
+    Schaetzung bleibt der Fallback fuer unkalibrierte Bestaende.
+    pending_s = laufende, noch ungebuchte ON-Phase (Live-Anzeige)."""
+    mps = row["ml_per_second"] if "ml_per_second" in row.keys() else None
+    if mps:
+        used = (row["seconds_since_refill"] + pending_s) * mps
+    else:
+        used = row["activations_since_refill"] * row["ml_per_activation"]
+    lvl = row["level_at_refill_ml"] - used
     return max(0.0, min(row["capacity_ml"], lvl))
 
 
@@ -260,15 +285,22 @@ def tank_state():
     with _tank_lock:
         row = _tank_conn().execute("SELECT * FROM tank WHERE id = 1").fetchone()
     cap = row["capacity_ml"]
-    level = _level_from_row(row)
+    pending = _fog_pending_s()
+    level = _level_from_row(row, pending)
     mpa = row["ml_per_activation"]
+    mps = row["ml_per_second"] if "ml_per_second" in row.keys() else None
+    secs = (row["seconds_since_refill"]
+            if "seconds_since_refill" in row.keys() else 0.0) or 0.0
     return {
         "capacity_ml": round(cap, 1),
         "level_ml": round(level, 1),
         "level_pct": round(level / cap * 100) if cap > 0 else 0,
         "ml_per_activation": round(mpa, 2),
+        "ml_per_second": round(mps, 3) if mps else None,
         "activations_since_refill": row["activations_since_refill"],
+        "fog_seconds_since_refill": round(secs + pending, 1),
         "est_activations_remaining": int(level / mpa) if mpa > 0 else None,
+        "est_seconds_remaining": int(level / mps) if mps else None,
         "calibrated": bool(row["calibrated"]),
         "last_refill_at": row["last_refill_at"],
     }
@@ -284,6 +316,46 @@ def tank_bump_activation():
             conn.commit()
     except Exception as e:
         print(f"❌ Tank activation bump failed: {e}")
+
+
+def tank_bump_seconds(s):
+    """Gemessene ON-Sekunden auf den laufenden Zyklus buchen."""
+    if s <= 0:
+        return
+    with _tank_lock:
+        conn = _tank_conn()
+        conn.execute("UPDATE tank SET seconds_since_refill = "
+                     "seconds_since_refill + ? WHERE id = 1", (float(s),))
+        conn.commit()
+
+
+# ---- ON-Zeit-Messung (2026-08-14) -------------------------------------------
+# Exakte Zeit zwischen "on" und "off" — der Nutzerfrage geschuldet ("nimmst
+# du die zeit genau?"): vorher zaehlte nur die Aktivierung, ein 3-s- und ein
+# 30-s-Burst galten gleich. Gecappt bei FOG_BURST_CAP_S, weil die Maschine
+# einen Burst nach ~20 s SELBST beendet (Handbuch: "ca. 20 Sekunden") und
+# Auto-Fog nie "off" sendet — ohne Cap zaehlte ein vergessenes Off endlos.
+FOG_BURST_CAP_S = float(os.environ.get("FOG_BURST_CAP_S", "20"))
+_fog_on_ts = None
+
+
+def _fog_pending_s(now=None):
+    """Laufende, noch ungebuchte ON-Phase (fuer Live-Anzeige/Level)."""
+    if _fog_on_ts is None:
+        return 0.0
+    return min(max(0.0, (now or time.time()) - _fog_on_ts), FOG_BURST_CAP_S)
+
+
+def _book_fog_time(now=None):
+    """ON-Phase abschliessen: Sekunden kumulativ (config) + Zyklus (tank)."""
+    global _fog_on_ts
+    if _fog_on_ts is None:
+        return 0.0
+    dur = _fog_pending_s(now)
+    _fog_on_ts = None
+    config["fogSecondsTotal"] = float(config.get("fogSecondsTotal", 0.0)) + dur
+    tank_bump_seconds(dur)
+    return dur
 
 
 def tank_refill(full=False, amount_ml=None, remaining_ml=None, was_empty=False):
@@ -328,6 +400,7 @@ def tank_refill(full=False, amount_ml=None, remaining_ml=None, was_empty=False):
 
         conn.execute(
             "UPDATE tank SET level_at_refill_ml = ?, activations_since_refill = 0, "
+            "seconds_since_refill = 0, "
             "ml_per_activation = ?, calibrated = ?, last_refill_at = ? WHERE id = 1",
             (level_after, new_mpa, new_cal, now))
         conn.execute(
@@ -366,7 +439,10 @@ def execute_command(command, kind="manual"):
         raise ValueError('Invalid command. Must be "on" or "off"')
     _rf_send(command)
     config["lastCommand"] = command
+    global _fog_on_ts
     if command == "on":
+        _book_fog_time()               # Auto-Wiederholung: alten Burst buchen
+        _fog_on_ts = time.time()
         config["fogActive"] = True
         config["lastActivated"] = datetime.datetime.now(
             datetime.timezone.utc).isoformat()
@@ -374,6 +450,7 @@ def execute_command(command, kind="manual"):
         log_activation(kind)
         tank_bump_activation()
     else:
+        _book_fog_time()
         config["fogActive"] = False
     save_config()
 
@@ -435,23 +512,23 @@ def stop_auto_fog():
 _CAL_MIN_SAMPLE = 0.5                  # ml/activation — below: implausible
 _CAL_MAX_SAMPLE = 200.0
 _CAL_MIN_ACTS = 3                      # fewer bursts = no trustworthy sample
+_CAL_MIN_FOG_S = 10.0                  # ab hier traegt das ZEIT-Sample (ml/s)
+_CAL_MIN_MPS = 0.01                    # ml/s-Plausibilitaet (500-W-Klasse
+_CAL_MAX_MPS = 2.0                     # liegt bei ~0,08; grosszuegig geklemmt)
 _cal_lock = threading.Lock()
 _cal = {"phase": "idle"}               # idle|fogging (+ fields)
 
 
-def refill_cal_compute(added_ml, acts, capacity_ml):
-    """Pure math + validation: sample ml/activation.
+def refill_cal_compute(added_ml, acts, secs, capacity_ml):
+    """Pure math + validation: (ml_je_aktivierung | None, ml_je_sekunde | None).
 
-    Raises ValueError with a user-facing German message — the GUI shows it
-    verbatim, so no silent garbage calibration can happen."""
+    Zeit-Sample (ml/s aus der EXAKT gemessenen on/off-Zeit) ist das primaere
+    Ergebnis; das Aktivierungs-Sample bleibt als Fallback/Zusatzinfo. Raises
+    ValueError mit deutschem Klartext — die GUI zeigt ihn woertlich."""
     added_ml = float(added_ml)
     acts = int(acts)
+    secs = float(secs)
     capacity_ml = float(capacity_ml)
-    if acts < _CAL_MIN_ACTS:
-        raise ValueError(
-            f"Nur {acts} Aktivierung(en) seit dem Start — für eine belastbare "
-            f"Zahl braucht es mindestens {_CAL_MIN_ACTS}. Einfach weiter über "
-            "App oder Auto-Fog nebeln und dann abschließen.")
     if added_ml <= 0:
         raise ValueError("Nachgefüllte Menge muss größer als 0 ml sein")
     if added_ml > capacity_ml:
@@ -459,13 +536,29 @@ def refill_cal_compute(added_ml, acts, capacity_ml):
             f"{added_ml:.0f} ml nachgefüllt, aber der Tank fasst nur "
             f"{capacity_ml:.0f} ml — Tankgröße prüfen oder Eingabe "
             "korrigieren")
-    sample = added_ml / acts
-    if not (_CAL_MIN_SAMPLE <= sample <= _CAL_MAX_SAMPLE):
+    if secs < _CAL_MIN_FOG_S and acts < _CAL_MIN_ACTS:
+        raise ValueError(
+            f"Zu wenig genebelt für eine belastbare Zahl (nur {acts} "
+            f"Aktivierung(en), {secs:.0f} s Nebelzeit) — mindestens "
+            f"{_CAL_MIN_ACTS} Aktivierungen oder {_CAL_MIN_FOG_S:.0f} s "
+            "über App/Auto nebeln, dann abschließen.")
+    mps = None
+    if secs >= _CAL_MIN_FOG_S:
+        mps = added_ml / secs
+        if not (_CAL_MIN_MPS <= mps <= _CAL_MAX_MPS):
+            raise ValueError(
+                f"Unplausibler Verbrauch ({mps:.2f} ml je Sekunde; die "
+                "500-W-Klasse liegt bei ~0,05–0,3) — wurde zwischendurch "
+                "mit der Funk-Fernbedienung der Maschine genebelt? Die "
+                "sieht der Pi nicht; nur App-/Auto-Nebel zählt.")
+    sample = added_ml / acts if acts >= 1 else None
+    if mps is None and sample is not None \
+            and not (_CAL_MIN_SAMPLE <= sample <= _CAL_MAX_SAMPLE):
         raise ValueError(
             f"Unplausibler Verbrauch ({sample:.1f} ml je Aktivierung) — "
             "wurde zwischendurch mit der Funk-Fernbedienung der Maschine "
             "genebelt? Die sieht der Pi nicht; nur App-/Auto-Nebel zählt.")
-    return sample
+    return sample, mps
 
 
 def refill_cal_state():
@@ -473,6 +566,8 @@ def refill_cal_state():
         st = dict(_cal)
     if st.get("phase") == "fogging":
         st["acts"] = max(0, config["activationCount"] - st.pop("acts0"))
+        st["fog_s"] = round(max(0.0, float(config.get("fogSecondsTotal", 0.0))
+                                 + _fog_pending_s() - st.pop("secs0")), 1)
         st["elapsed_s"] = max(0, int(time.time() - st.pop("t0")))
     return st
 
@@ -490,9 +585,11 @@ def refill_cal_start(capacity_ml=None):
     if not cap or cap <= 0:
         raise ValueError("Erst die Tankgröße angeben — sie ist die Referenz "
                          "für „randvoll“")
+    _book_fog_time()   # offene ON-Phase gehoert noch zum ALTEN Zyklus
     with _cal_lock:
         _cal.clear()
         _cal.update({"phase": "fogging", "acts0": config["activationCount"],
+                     "secs0": float(config.get("fogSecondsTotal", 0.0)),
                      "t0": time.time(), "capacity_ml": cap})
     return refill_cal_state()
 
@@ -503,9 +600,11 @@ def refill_cal_finish(added_ml):
         if _cal.get("phase") != "fogging":
             raise ValueError("Keine laufende Kalibrierung")
         st = dict(_cal)
+    _book_fog_time()   # laufende ON-Phase noch in DIESEN Lauf buchen
     acts = max(0, config["activationCount"] - st["acts0"])
+    secs = max(0.0, float(config.get("fogSecondsTotal", 0.0)) - st["secs0"])
     cap = tank_state()["capacity_ml"]  # live — Größe kann im Lauf geändert sein
-    sample = refill_cal_compute(added_ml, acts, cap)
+    sample, mps = refill_cal_compute(added_ml, acts, secs, cap)
     added = float(added_ml)
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
     with _tank_lock:
@@ -513,24 +612,33 @@ def refill_cal_finish(added_ml):
         row = conn.execute("SELECT * FROM tank WHERE id = 1").fetchone()
         cap = row["capacity_ml"]
         old_mpa = row["ml_per_activation"]
-        # Brim-full is the absolute reference: level = capacity, counter = 0.
+        # Brim-full is the absolute reference: level = capacity, counters = 0.
+        # ml_per_second wird auch auf None gesetzt, wenn der Lauf zu kurz fuer
+        # ein Zeit-Sample war — Kalibrierung ERSETZT, sie mischt nicht.
         conn.execute(
             "UPDATE tank SET level_at_refill_ml = ?, activations_since_refill = 0, "
-            "ml_per_activation = ?, calibrated = 1, last_refill_at = ? WHERE id = 1",
-            (cap, sample, now))
+            "seconds_since_refill = 0, ml_per_activation = ?, ml_per_second = ?, "
+            "calibrated = 1, last_refill_at = ? WHERE id = 1",
+            (cap, sample if sample is not None else old_mpa, mps, now))
         conn.execute(
             "INSERT INTO refills (ts, level_before_ml, remaining_ml, amount_added_ml, "
-            "level_after_ml, activations_in_cycle, ml_per_act_sample, was_empty) "
-            "VALUES (?,?,?,?,?,?,?,0)",
+            "level_after_ml, activations_in_cycle, ml_per_act_sample, was_empty, "
+            "fog_seconds_in_cycle, ml_per_s_sample) "
+            "VALUES (?,?,?,?,?,?,?,0,?,?)",
             (now, round(cap, 1), round(max(0.0, cap - added), 1),
-             round(added, 1), round(cap, 1), acts, round(sample, 3)))
+             round(added, 1), round(cap, 1), acts,
+             round(sample, 3) if sample is not None else None,
+             round(secs, 1), round(mps, 4) if mps is not None else None))
         conn.commit()
     with _cal_lock:
         _cal.clear()
         _cal.update({"phase": "idle"})
-    return {"acts": acts, "added_ml": round(added, 1),
+    return {"acts": acts, "fog_seconds": round(secs, 1),
+            "added_ml": round(added, 1),
             "ml_per_activation_old": round(old_mpa, 2),
-            "ml_per_activation": round(sample, 2), **tank_state()}
+            "ml_per_activation": round(sample, 2) if sample is not None else None,
+            "ml_per_second": round(mps, 3) if mps is not None else None,
+            **tank_state()}
 
 
 def refill_cal_abort():

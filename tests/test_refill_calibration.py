@@ -47,30 +47,47 @@ def _fresh_tank():
 
 
 class RefillCalCompute(unittest.TestCase):
-    def test_happy_path(self):
-        # 80 ml ueber 10 Aktivierungen = 8 ml je Stoss
-        self.assertAlmostEqual(server.refill_cal_compute(80, 10, 250), 8.0)
+    def test_happy_path_time_sample_is_primary(self):
+        # 80 ml ueber 10 Aktivierungen / 400 s -> 8 ml/Stoss + 0,2 ml/s
+        sample, mps = server.refill_cal_compute(80, 10, 400, 250)
+        self.assertAlmostEqual(sample, 8.0)
+        self.assertAlmostEqual(mps, 0.2)
 
-    def test_too_few_activations_has_plain_language(self):
+    def test_short_fog_time_falls_back_to_activations(self):
+        sample, mps = server.refill_cal_compute(40, 5, 4, 250)
+        self.assertAlmostEqual(sample, 8.0)
+        self.assertIsNone(mps, "unter _CAL_MIN_FOG_S gibt es kein Zeit-Sample")
+
+    def test_too_little_data_has_plain_language(self):
         with self.assertRaises(ValueError) as cm:
-            server.refill_cal_compute(50, 2, 250)
-        self.assertIn("mindestens", str(cm.exception))
+            server.refill_cal_compute(50, 2, 4, 250)
+        self.assertIn("Zu wenig genebelt", str(cm.exception))
+
+    def test_long_run_with_few_activations_is_fine(self):
+        # 2 lange manuelle on/off-Bursts: Zeit-Sample traegt allein
+        sample, mps = server.refill_cal_compute(12, 2, 60, 250)
+        self.assertAlmostEqual(mps, 0.2)
+        self.assertAlmostEqual(sample, 6.0)
 
     def test_zero_or_negative_ml_rejected(self):
         for ml in (0, -5):
             with self.assertRaises(ValueError):
-                server.refill_cal_compute(ml, 5, 250)
+                server.refill_cal_compute(ml, 5, 100, 250)
 
     def test_more_than_capacity_rejected(self):
         with self.assertRaises(ValueError) as cm:
-            server.refill_cal_compute(300, 5, 250)
+            server.refill_cal_compute(300, 5, 100, 250)
         self.assertIn("Tankgröße", str(cm.exception))
 
-    def test_implausible_sample_names_the_rf_remote(self):
-        # 1 ml ueber 10 Stoesse = 0.1 ml/Stoss -> unter der Untergrenze;
-        # der Klartext nennt die wahrscheinlichste Ursache (Funk-Fernbedienung)
+    def test_implausible_mps_names_the_rf_remote(self):
+        # 200 ml in 20 s = 10 ml/s — weit ueber der 500-W-Klasse
         with self.assertRaises(ValueError) as cm:
-            server.refill_cal_compute(1, 10, 250)
+            server.refill_cal_compute(200, 5, 20, 250)
+        self.assertIn("Funk-Fernbedienung", str(cm.exception))
+
+    def test_implausible_act_sample_names_the_rf_remote(self):
+        with self.assertRaises(ValueError) as cm:
+            server.refill_cal_compute(1, 10, 4, 250)
         self.assertIn("Funk-Fernbedienung", str(cm.exception))
 
 
@@ -78,12 +95,16 @@ class RefillCalFlow(unittest.TestCase):
     def setUp(self):
         _fresh_tank()
         server.refill_cal_abort()
-        server.config["activationCount"] = 100   # kumulativer Snapshot-Zaehler
+        server.config["activationCount"] = 100   # kumulative Snapshot-Zaehler
+        server.config["fogSecondsTotal"] = 500.0
 
-    def _fog(self, n):
+    def _fog(self, n, secs=0.0):
         server.config["activationCount"] += n
         for _ in range(n):
             server.tank_bump_activation()
+        if secs:
+            server.config["fogSecondsTotal"] += secs
+            server.tank_bump_seconds(secs)
 
     def test_start_requires_idle(self):
         server.refill_cal_start(250)
@@ -105,16 +126,20 @@ class RefillCalFlow(unittest.TestCase):
 
     def test_finish_commits_atomically(self):
         server.refill_cal_start(250)
-        self._fog(10)
+        self._fog(10, secs=400.0)
         res = server.refill_cal_finish(80)
         self.assertAlmostEqual(res["ml_per_activation"], 8.0)
+        self.assertAlmostEqual(res["ml_per_second"], 0.2)
         self.assertEqual(res["acts"], 10)
+        self.assertAlmostEqual(res["fog_seconds"], 400.0)
         s = server.tank_state()
-        # randvoll = Kapazitaet, Zaehler genullt, kalibriert
+        # randvoll = Kapazitaet, Zaehler genullt, kalibriert, Zeit-Modell aktiv
         self.assertEqual(s["level_ml"], 250.0)
         self.assertEqual(s["activations_since_refill"], 0)
+        self.assertEqual(s["fog_seconds_since_refill"], 0.0)
         self.assertTrue(s["calibrated"])
         self.assertAlmostEqual(s["ml_per_activation"], 8.0)
+        self.assertAlmostEqual(s["ml_per_second"], 0.2)
         # Refill-Zeile fuer die Historie
         hist = server.tank_history()
         self.assertEqual(hist[0]["amount_added_ml"], 80.0)
@@ -169,3 +194,42 @@ class RefillCalFlow(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FogTimeTracking(unittest.TestCase):
+    """ON-Zeit-Messung (2026-08-14): exakt zwischen on/off, gecappt."""
+
+    def setUp(self):
+        _fresh_tank()
+        server.refill_cal_abort()
+        server.config["fogSecondsTotal"] = 0.0
+        server._fog_on_ts = None
+
+    def test_booking_is_exact_between_on_and_off(self):
+        server._fog_on_ts = 1000.0
+        dur = server._book_fog_time(now=1007.5)
+        self.assertAlmostEqual(dur, 7.5)
+        self.assertAlmostEqual(server.config["fogSecondsTotal"], 7.5)
+        self.assertIsNone(server._fog_on_ts)
+
+    def test_booking_caps_a_forgotten_off(self):
+        # Auto-Fog sendet nie "off"; die Maschine beendet den Burst selbst —
+        # ohne Cap zaehlte eine vergessene ON-Phase endlos.
+        server._fog_on_ts = 1000.0
+        dur = server._book_fog_time(now=1000.0 + 999)
+        self.assertAlmostEqual(dur, server.FOG_BURST_CAP_S)
+
+    def test_pending_phase_counts_into_live_level(self):
+        # mps kalibrieren, dann eine LAUFENDE ON-Phase: Level sinkt live
+        server.refill_cal_start(250)
+        server.config["activationCount"] += 4
+        for _ in range(4):
+            server.tank_bump_activation()
+        server.config["fogSecondsTotal"] += 100.0
+        server.tank_bump_seconds(100.0)
+        server.refill_cal_finish(20)          # 0,2 ml/s
+        server._fog_on_ts = time.time() - 10  # 10 s on, noch kein off
+        s = server.tank_state()
+        self.assertLess(s["level_ml"], 250.0)
+        self.assertGreater(s["level_ml"], 245.0)
+        server._fog_on_ts = None
