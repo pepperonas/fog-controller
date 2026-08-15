@@ -115,3 +115,28 @@ test('Nachfuell-Marker werden gezeichnet', () => {
   assert.match(SRC, /refill-line/);
   assert.match(SRC, /data\.refills/);
 });
+
+// ── Vertikale Abstände zum Seitenfuss (2026-08-15) ───────────────────────
+
+test('kein doppeltes Unterpolster, wenn der geteilte Fuss da ist', () => {
+  // Der Fuss bringt 56 px mit; das Container-Polster obendrauf ergab 128 px
+  // unter der letzten Karte (Haus-Mass: 56).
+  assert.match(SRC, /body\.sh-footer-page\s+\.container\s*\{[^}]*padding-bottom:\s*0/);
+});
+
+test('ohne Fuss behaelt der Container sein Polster', () => {
+  // Direktzugriff per Port hat keine nav.js und damit keinen Fuss — dann
+  // darf der Inhalt nicht buendig am Fensterrand enden.
+  assert.match(SRC, /\.container\s*\{[^}]*padding:\s*0 0 var\(--sh-pad-bottom\)/);
+});
+
+test('Desktop-Layout ist zweispaltig und streckt die Karten nicht', () => {
+  const mq = SRC.slice(SRC.indexOf('@media (min-width: 900px)'));
+  assert.match(mq, /grid-template-areas/);
+  assert.match(mq, /align-items:\s*start/,
+    'ohne align-items:start wachsen die Karten auf die Zeilenhoehe');
+  for (const id of ['card-power', 'card-stats', 'card-advanced', 'card-tank', 'card-chart']) {
+    assert.ok(SRC.includes(`id="${id}"`), `Karte ${id} fehlt`);
+    assert.match(mq, new RegExp(`#${id}\\s*\\{\\s*grid-area`), `${id} ohne grid-area`);
+  }
+});
