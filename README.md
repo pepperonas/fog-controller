@@ -154,7 +154,8 @@ No GPIO, no real database, no network — all tests run on any platform.
 pip install -r requirements-dev.txt
 
 # Run
-python3 -m pytest tests/ -v
+python3 -m pytest tests/ -v      # Backend: Tank-Modell, Kalibrierung, Buckets
+node --test tests/               # Oberflaeche: Formatierer + Vertragspins
 ```
 
 ## Author
