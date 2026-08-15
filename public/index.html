@@ -172,23 +172,36 @@
            rechts Tank und Verlauf. `align-items:start` ist Pflicht — sonst
            strecken sich die Karten auf die Zeilenhoehe (dieselbe Falle wie
            bei lichtwerk). */
+        /* Abstand zwischen den Karten kommt ab hier aus `gap` statt aus dem
+           Kartenrand — sonst traegt die LETZTE Karte noch einen Rand vor dem
+           Fuss. Beide Werte sind 1rem, das Bild aendert sich also nicht. */
+        .container { display: flex; flex-direction: column; gap: var(--sh-gap-lg); }
+        .container .card { margin-bottom: 0; }
+        /* Mobil loesen sich die Spalten auf; `order` haelt die gewohnte
+           Reihenfolge (… Tank, Verlauf, NOTAUS zuletzt), obwohl NOTAUS im
+           Markup jetzt in der linken Spalte steht. */
+        .col { display: contents; }
+        #card-power { order: 1; } #card-stats { order: 2; } #card-tank  { order: 3; }
+        #card-chart { order: 4; } #card-advanced { order: 5; }
+
         @media (min-width: 900px) {
-            .container > .card { margin-bottom: 0; }
+            /* ⚠️ Zwei Spalten NICHT ueber grid-template-areas: Grid teilt die
+               Zeilenhoehe zwischen den Spalten, also riss unter der kurzen
+               Tank-Karte ein ~280-px-Loch auf, bis der Verlauf in Zeile 3
+               begann (Nutzerbefund 2026-08-15). Zwei eigenstaendige
+               Flex-Spalten packen dagegen jede fuer sich dicht. */
             .container {
                 display: grid;
                 grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
-                grid-template-areas:
-                    "power    tank"
-                    "stats    tank"
-                    "advanced chart";
                 gap: var(--spacing-4);
                 align-items: start;
             }
-            #card-power    { grid-area: power; }
-            #card-stats    { grid-area: stats; }
-            #card-advanced { grid-area: advanced; }
-            #card-tank     { grid-area: tank; }
-            #card-chart    { grid-area: chart; }
+            .col {
+                display: flex;
+                flex-direction: column;
+                gap: var(--spacing-4);
+                min-width: 0;
+            }
             /* etwas straffer als mobil, ohne die Touch-Groessen zu opfern */
             .card { padding: var(--spacing-4) var(--spacing-5); }
             .card h2 { margin-bottom: var(--spacing-3); }
@@ -616,7 +629,7 @@ h1,h2,h3{ text-wrap:balance; }
         .btn .sh-i{margin-right:.35rem}
 </style>
     <script src="/shared/icons.js?v=7" defer></script>
-    <script src="/shared/nav.js?v=18" defer blocking="render"></script>
+    <script src="/shared/nav.js?v=20" defer blocking="render"></script>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
 </head>
@@ -634,6 +647,7 @@ h1,h2,h3{ text-wrap:balance; }
     </header>
 
     <div class="container">
+        <div class="col">
         <!-- Main Control -->
         <div class="card" id="card-power">
             <h2><span class="sh-i" data-sh-icon="mist" aria-hidden="true"></span>Nebelmaschine Steuerung</h2>
@@ -664,6 +678,18 @@ h1,h2,h3{ text-wrap:balance; }
             </div>
         </div>
 
+        <!-- Additional Controls -->
+        <div class="card" id="card-advanced">
+            <h2>Erweiterte Steuerung</h2>
+            <div class="control-grid">
+                <button class="btn btn-danger" id="force-off">
+                    <span><span class="sh-i" data-sh-icon="power" aria-hidden="true"></span>NOTAUS</span>
+                </button>
+            </div>
+        </div>
+        </div>
+
+        <div class="col">
         <!-- Tank / Füllstand -->
         <div class="card tank-card" id="card-tank">
             <h2><span class="sh-i" data-sh-icon="droplet" aria-hidden="true"></span>Tankfüllstand</h2>
@@ -721,14 +747,6 @@ h1,h2,h3{ text-wrap:balance; }
             </div>
         </div>
 
-        <!-- Additional Controls -->
-        <div class="card" id="card-advanced">
-            <h2>Erweiterte Steuerung</h2>
-            <div class="control-grid">
-                <button class="btn btn-danger" id="force-off">
-                    <span><span class="sh-i" data-sh-icon="power" aria-hidden="true"></span>NOTAUS</span>
-                </button>
-            </div>
         </div>
     </div>
 
