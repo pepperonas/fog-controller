@@ -159,6 +159,40 @@
             margin: 0 auto;
             padding: 0 0 var(--sh-pad-bottom);
         }
+        /* Mit geteiltem Seitenfuss bringt DER seinen Abstand mit (56 px) —
+           zusammen mit dem Unterpolster des Containers waren es 128 px
+           unter der letzten Karte (Haus-Mass: 56). Ohne Fuss (Direktzugriff
+           per Port) bleibt das Polster, sonst endet der Inhalt buendig. */
+        body.sh-footer-page .container { padding-bottom: 0; }
+
+        /* ── Kompaktes Desktop-Layout (2026-08-15) ────────────────────────
+           Fuenf Karten untereinander ergaben bei 1280 px eine 1935 px hohe
+           Seite, waehrend rechts die halbe Breite leer blieb. Ab 900 px
+           zwei Spalten: links die Bedienung (Steuerung/Statistik/Erweitert),
+           rechts Tank und Verlauf. `align-items:start` ist Pflicht — sonst
+           strecken sich die Karten auf die Zeilenhoehe (dieselbe Falle wie
+           bei lichtwerk). */
+        @media (min-width: 900px) {
+            .container > .card { margin-bottom: 0; }
+            .container {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+                grid-template-areas:
+                    "power    tank"
+                    "stats    tank"
+                    "advanced chart";
+                gap: var(--spacing-4);
+                align-items: start;
+            }
+            #card-power    { grid-area: power; }
+            #card-stats    { grid-area: stats; }
+            #card-advanced { grid-area: advanced; }
+            #card-tank     { grid-area: tank; }
+            #card-chart    { grid-area: chart; }
+            /* etwas straffer als mobil, ohne die Touch-Groessen zu opfern */
+            .card { padding: var(--spacing-4) var(--spacing-5); }
+            .card h2 { margin-bottom: var(--spacing-3); }
+        }
 
         .card {
             background-color: var(--card-background);
@@ -601,7 +635,7 @@ h1,h2,h3{ text-wrap:balance; }
 
     <div class="container">
         <!-- Main Control -->
-        <div class="card">
+        <div class="card" id="card-power">
             <h2><span class="sh-i" data-sh-icon="mist" aria-hidden="true"></span>Nebelmaschine Steuerung</h2>
             <div class="fog-button" id="fog-btn">
                 <span style="font-size: 60px;"><span data-sh-icon="fog"></span> </span>
@@ -612,7 +646,7 @@ h1,h2,h3{ text-wrap:balance; }
         </div>
 
         <!-- Statistics -->
-        <div class="card">
+        <div class="card" id="card-stats">
             <h2>Statistik</h2>
             <div class="stats-grid">
                 <div class="stat-card">
@@ -631,7 +665,7 @@ h1,h2,h3{ text-wrap:balance; }
         </div>
 
         <!-- Tank / Füllstand -->
-        <div class="card tank-card">
+        <div class="card tank-card" id="card-tank">
             <h2><span class="sh-i" data-sh-icon="droplet" aria-hidden="true"></span>Tankfüllstand</h2>
             <div class="tank-layout">
                 <div class="tank-gauge">
@@ -672,7 +706,7 @@ h1,h2,h3{ text-wrap:balance; }
         </div>
 
         <!-- Usage Chart -->
-        <div class="card">
+        <div class="card" id="card-chart">
             <h2 style="display:flex;justify-content:space-between;align-items:center;gap:var(--spacing-3);flex-wrap:wrap;">Nutzungsverlauf
                 <span class="chart-ranges" id="usage-ranges" role="group" aria-label="Zeitraum">
                     <button data-r="1h">1h</button>
@@ -688,7 +722,7 @@ h1,h2,h3{ text-wrap:balance; }
         </div>
 
         <!-- Additional Controls -->
-        <div class="card">
+        <div class="card" id="card-advanced">
             <h2>Erweiterte Steuerung</h2>
             <div class="control-grid">
                 <button class="btn btn-danger" id="force-off">
