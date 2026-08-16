@@ -308,7 +308,7 @@
             padding: var(--spacing-4);
             border-radius: var(--radius);
             text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
         }
 
         .stat-value {
@@ -420,7 +420,7 @@
             display: inline-block;
             width: 20px;
             height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
+            border: 3px solid color-mix(in srgb, var(--text-primary) 32%, transparent);
             border-radius: 50%;
             border-top-color: var(--accent-blue);
             animation: spin 1s ease-in-out infinite;
@@ -607,7 +607,7 @@ h1,h2,h3{ text-wrap:balance; }
 
 /* ---- Chart (SVG) ---- */
 .chart-ranges{ display:inline-flex; gap:4px; }
-.chart-ranges button{ background:none; border:1px solid var(--sh-outline, rgba(255,255,255,.15));
+.chart-ranges button{ background:none; border:1px solid var(--sh-outline, color-mix(in srgb, var(--text-primary) 18%, transparent));
     color:var(--text-secondary); border-radius:999px; padding:3px 10px; font-size:.72rem;
     font-weight:700; cursor:pointer; transition:all .15s ease; }
 .chart-ranges button:hover{ color:var(--text-primary); }
@@ -628,8 +628,8 @@ h1,h2,h3{ text-wrap:balance; }
         h1 .sh-i,h2 .sh-i,h3 .sh-i{margin-right:.4rem;vertical-align:-.1em}
         .btn .sh-i{margin-right:.35rem}
 </style>
-    <script src="/shared/icons.js?v=8" defer></script>
-    <script src="/shared/nav.js?v=20" defer blocking="render"></script>
+    <script src="/shared/icons.js?v=9" defer></script>
+    <script src="/shared/nav.js?v=21" defer blocking="render"></script>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
 </head>
