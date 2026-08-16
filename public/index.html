@@ -365,7 +365,11 @@
 
         .btn-danger {
             background-color: var(--accent-red);
-            color: #5c0a06;                     /* MD3 on-error tone — dark red on salmon */
+            /* ⚠️ War fest #5c0a06 — dunkles Rot auf Lachs. Das passt zum
+               DUNKLEN Theme, wo --accent-red hell ist; im hellen Theme ist der
+               Ton kraeftig und dunkelrote Schrift darauf kam auf 2,36:1
+               (gemessen 2026-08-16). Das Haus-Gegenstueck kippt mit. */
+            color: var(--sh-on-loud);
             font-weight: 700;
         }
 
@@ -573,6 +577,11 @@ h1,h2,h3{ text-wrap:balance; }
 .badge{ display:inline-block; align-self:flex-start; font-size:.72rem; font-weight:700; letter-spacing:.02em;
   padding:.22rem .6rem; border-radius:999px; background:color-mix(in srgb,var(--accent-orange) 20%,transparent);
   color:var(--accent-orange); border:1px solid color-mix(in srgb,var(--accent-orange) 40%,transparent); }
+/* ⚠️ Die Akzenttoene sind Pastell FUER DUNKLEN GRUND. Auf der hellen Karte
+   misst die Plakette 1,46:1 (gemessen 2026-08-16) — die Schriftfarbe braucht
+   dort den dunklen Partner, die Flaeche bleibt wie sie ist. */
+[data-theme="light"] .badge{ color:#8a5a00; border-color:color-mix(in srgb,#8a5a00 35%,transparent); }
+[data-theme="light"] .badge.ok{ color:var(--sh-ok); border-color:color-mix(in srgb,var(--sh-ok) 35%,transparent); }
 .badge.ok{ background:color-mix(in srgb,var(--accent-green) 18%,transparent); color:var(--accent-green);
   border-color:color-mix(in srgb,var(--accent-green) 38%,transparent); }
 .tank-actions{ display:flex; gap:var(--spacing-2); flex-wrap:wrap; margin-top:var(--spacing-3); }
@@ -612,7 +621,8 @@ h1,h2,h3{ text-wrap:balance; }
     font-weight:700; cursor:pointer; transition:all .15s ease; }
 .chart-ranges button:hover{ color:var(--text-primary); }
 .chart-ranges button.active{ background:var(--accent-blue); border-color:var(--accent-blue);
-    color:#fff; }
+    /* war #fff: im dunklen Theme ist --accent-blue hell, weiss darauf 1,7:1 */
+    color:var(--sh-on-primary); }
 .chart-svg .refill-line{ stroke:var(--accent-green); stroke-width:1.4;
     stroke-dasharray:3 3; opacity:.8; }
 .chart-svg .refill-drop{ fill:var(--accent-green); }
