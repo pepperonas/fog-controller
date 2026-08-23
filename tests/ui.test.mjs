@@ -139,7 +139,7 @@ test('Desktop-Layout ist zweispaltig und streckt die Karten nicht', () => {
   assert.match(mq, /grid-template-columns/);
   assert.match(mq, /align-items:\s*start/,
     'ohne align-items:start wachsen die Karten auf die Zeilenhoehe');
-  for (const id of ['card-power', 'card-stats', 'card-advanced', 'card-tank', 'card-chart']) {
+  for (const id of ['card-power', 'card-stats', 'card-tank', 'card-chart']) {
     assert.ok(SRC.includes(`id="${id}"`), `Karte ${id} fehlt`);
   }
 });
@@ -162,16 +162,84 @@ test('die Karten sind spaltenweise verteilt', () => {
   const ids = SRC.slice(SRC.indexOf('<div class="container">'))
     .split('<div class="col">').slice(1)
     .map(b => [...b.matchAll(/id="(card-[a-z]+)"/g)].map(m => m[1]));
-  assert.deepEqual(ids[0], ['card-power', 'card-stats', 'card-advanced']);
+  assert.deepEqual(ids[0], ['card-power', 'card-stats']);
   assert.deepEqual(ids[1], ['card-tank', 'card-chart']);
 });
 
 test('mobil loesen sich die Spalten auf und die Reihenfolge bleibt', () => {
-  /* Mit display:contents zaehlt die Markup-Folge — die ist jetzt spaltenweise.
-     `order` haelt die gewohnte Abfolge (… Tank, Verlauf, NOTAUS zuletzt),
-     obwohl NOTAUS im Markup in die linke Spalte gewandert ist. */
+  /* Mit display:contents zaehlt die Markup-Folge — die ist spaltenweise.
+     `order` haelt die gewohnte Abfolge Steuerung, Statistik, Tank, Verlauf. */
   assert.match(SRC, /\.col\s*\{\s*display:\s*contents/);
   const paare = [...SRC.matchAll(/#(card-[a-z]+)\s*\{\s*order:\s*(\d+)/g)]
     .sort((a, b) => Number(a[2]) - Number(b[2])).map(m => m[1]);
-  assert.deepEqual(paare, ['card-power', 'card-stats', 'card-tank', 'card-chart', 'card-advanced']);
+  assert.deepEqual(paare, ['card-power', 'card-stats', 'card-tank', 'card-chart']);
+});
+
+// ── GUI-Rework 2026-08-23: NOTAUS raus, Chart auf Nebelzeit ─────────────
+
+test('Erweiterte Steuerung und NOTAUS sind restlos entfernt', () => {
+  /* Auftrag 2026-08-23. Restlos heisst auch: kein Handler, der beim Laden
+     auf ein fehlendes Element greift und die App reisst. */
+  for (const tot of ['card-advanced', 'NOTAUS', 'force-off', 'forceOffBtn',
+                     'control-grid', 'async turnOn', 'async turnOff']) {
+    assert.ok(!SRC.includes(tot), `${tot} ist noch da`);
+  }
+});
+
+test('btn-danger BLEIBT — der Kalibrier-Abbrechen-Knopf traegt sie', () => {
+  // Die NOTAUS-Entfernung darf die geteilte Gefahren-Klasse nicht mitreissen.
+  assert.ok(SRC.includes('id="calib-abort"'));
+  assert.match(SRC, /\.btn-danger\s*\{/);
+});
+
+test('⚠️ der Chart zeigt Nebelzeit, nicht Aktivierungs-Zaehlung', () => {
+  /* Die App rechnet ueberall in Sekunden (Tank, ml/s, Kalibrierung) — der
+     alte Chart zaehlte Aktivierungen: ein 1-s-Stoss wog wie ein 20-s-Stoss. */
+  const fn = extractMethod('renderChart');
+  assert.match(fn, /const proSekunde = totalFog > 0;/,
+    'kein Sekunden-Modus mehr');
+  assert.match(fn, /proSekunde \? \(d\.fog_s \|\| 0\) : d\.count/,
+    'Balkenhoehe kommt nicht aus fog_s');
+});
+
+test('Altbestand ohne Dauer faellt ehrlich auf die Zaehlung zurueck', () => {
+  /* Vor 2026-08-14 wurde keine Dauer geloggt. Ein Fenster NUR aus solchen
+     Daten (30d-Altbestand) waere im Sekunden-Modus leer — gelogen. */
+  const fn = extractMethod('renderChart');
+  assert.match(fn, /'Aktivierungen'/, 'kein Zaehl-Fallback');
+  assert.match(fn, /stummel/, 'dauerlose Buckets im Sekunden-Modus haben keinen Stummel');
+  assert.match(fn, /Dauer nicht erfasst/);
+});
+
+test('⚠️ keine Ampelfarben nach relativer Balkenhoehe mehr', () => {
+  /* Dieselbe Nutzung war je nach Fenstermaximum blau oder rot — Rot las
+     sich als Warnung, kodierte aber nur "hoechster Balken im Bild". */
+  const fn = extractMethod('renderChart');
+  assert.ok(!fn.includes('frac > 0.7') && !fn.includes('frac > 0.4'),
+    'das relative Ampel-Ranking ist zurueck');
+  assert.match(fn, /var\(--accent-blue\)/);
+});
+
+test('der laufende Bucket ist als angebrochen gekennzeichnet', () => {
+  // Die aktuelle Stunde ist fast immer "niedriger" — ohne Kennzeichnung
+  // liest sie sich als Einbruch am rechten Rand.
+  const fn = extractMethod('renderChart');
+  assert.match(fn, /d\.t \+ bucketS > jetzt/);
+  assert.match(fn, /laeuft/);
+});
+
+test('die Summenzeile beantwortet die Frage ohne Tooltip', () => {
+  /* Auf Touch gibt es keine <title>-Tooltips — die Kernaussage (wie viel
+     Nebel, wie viele Stoesse) muss ausserhalb der Balken stehen. */
+  assert.ok(SRC.includes('id="usage-summary"'));
+  const fn = extractMethod('renderChart');
+  assert.match(fn, /fmtActive\(totalFog\)/);
+  assert.match(fn, /je Stoß/);
+});
+
+test('die Y-Achse traegt im Sekunden-Modus die fmtActive-Einheit', () => {
+  const fn = extractMethod('renderChart');
+  assert.match(fn, /proSekunde \? this\.fmtActive\(t\) : String\(t\)/);
+  // fmtActive-Labels ("12:34 min") brauchen mehr Platz als Zaehler
+  assert.match(fn, /padL = proSekunde \? 52 : 28/);
 });

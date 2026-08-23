@@ -168,7 +168,7 @@
         /* ── Kompaktes Desktop-Layout (2026-08-15) ────────────────────────
            Fuenf Karten untereinander ergaben bei 1280 px eine 1935 px hohe
            Seite, waehrend rechts die halbe Breite leer blieb. Ab 900 px
-           zwei Spalten: links die Bedienung (Steuerung/Statistik/Erweitert),
+           zwei Spalten: links die Bedienung (Steuerung/Statistik),
            rechts Tank und Verlauf. `align-items:start` ist Pflicht — sonst
            strecken sich die Karten auf die Zeilenhoehe (dieselbe Falle wie
            bei lichtwerk). */
@@ -178,11 +178,10 @@
         .container { display: flex; flex-direction: column; gap: var(--sh-gap-lg); }
         .container .card { margin-bottom: 0; }
         /* Mobil loesen sich die Spalten auf; `order` haelt die gewohnte
-           Reihenfolge (… Tank, Verlauf, NOTAUS zuletzt), obwohl NOTAUS im
-           Markup jetzt in der linken Spalte steht. */
+           Reihenfolge (Steuerung, Statistik, Tank, Verlauf). */
         .col { display: contents; }
         #card-power { order: 1; } #card-stats { order: 2; } #card-tank  { order: 3; }
-        #card-chart { order: 4; } #card-advanced { order: 5; }
+        #card-chart { order: 4; }
 
         @media (min-width: 900px) {
             /* ⚠️ Zwei Spalten NICHT ueber grid-template-areas: Grid teilt die
@@ -221,26 +220,28 @@
         }
 
         .card h2 {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: var(--spacing-4);
+            font-size: 1.1rem;
+            font-weight: 650;
+            margin-bottom: var(--spacing-3);
             color: var(--accent-blue);
             text-align: center;
         }
 
         /* Fog Button */
         .fog-button {
-            width: 200px;
-            height: 200px;
+            /* 200 px waren ein Drittel der Kartenhoehe fuer EINEN Knopf —
+               140 px bleiben unuebersehbar und sparen 60 px (2026-08-23). */
+            width: 140px;
+            height: 140px;
             border-radius: 50%;
-            border: 4px solid var(--fog-inactive);
+            border: 3px solid var(--fog-inactive);
             background: var(--background-darker);
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.3s ease;
-            margin: 0 auto var(--spacing-6);
+            margin: 0 auto var(--spacing-3);
             position: relative;
             box-shadow: var(--shadow-lg);
         }
@@ -282,9 +283,10 @@
 
         .fog-status {
             text-align: center;
-            font-size: 1.25rem;
+            font-size: 1rem;
             font-weight: 600;
-            margin-bottom: var(--spacing-8);
+            /* letztes Element der Karte — ein Unterrand polsterte hier nur */
+            margin-bottom: 0;
         }
 
         .fog-status.active {
@@ -298,21 +300,26 @@
         /* Stats Cards */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: var(--spacing-4);
-            margin-bottom: var(--spacing-6);
+            /* 100er-Spuren statt 200: die drei Kacheln bleiben in der
+               schmalen Desktop-Spalte nebeneinander. Fuers Handy reicht KEIN
+               minmax-Wert: das Raster misst dort real nur 283 px (gemessen —
+               nicht die naiv gerechneten ~338), auto-fit kippt also auf 2+1.
+               Darum unten im Mobil-Block ein festes repeat(3, 1fr). */
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: var(--spacing-3);
+            margin-bottom: 0;
         }
 
         .stat-card {
             background: var(--background-darker);
-            padding: var(--spacing-4);
+            padding: var(--spacing-3);
             border-radius: var(--radius);
             text-align: center;
             border: 1px solid color-mix(in srgb, var(--text-primary) 10%, transparent);
         }
 
         .stat-value {
-            font-size: 2rem;
+            font-size: 1.4rem;
             font-weight: 700;
             color: var(--accent-blue);
         }
@@ -321,14 +328,6 @@
             font-size: 0.875rem;
             color: var(--text-secondary);
             margin-top: var(--spacing-1);
-        }
-
-        /* Control Buttons */
-        .control-grid {
-            display: flex;
-            justify-content: center;
-            gap: var(--spacing-4);
-            margin-top: var(--spacing-6);
         }
 
         .btn {
@@ -475,23 +474,21 @@
             }
 
             .fog-button {
-                width: 150px;
-                height: 150px;
+                width: 120px;
+                height: 120px;
             }
 
             .fog-button svg {
-                width: 60px;
-                height: 60px;
+                width: 48px;
+                height: 48px;
             }
 
-            .control-grid {
-                grid-template-columns: 1fr;
-                padding: 0 var(--spacing-2);
-            }
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
+            /* Drei Kacheln nebeneinander, deterministisch — auto-fit rechnet
+               bei 283 px Rasterbreite nur zwei Spuren. Das Label bekommt
+               .8rem, sonst ragt das eine Wort "Aktivierungen" aus der
+               ~86-px-Kachel. */
+            .stats-grid { grid-template-columns: repeat(3, 1fr); gap: var(--spacing-2); }
+            .stat-label { font-size: .8rem; }
 
             .btn {
                 max-width: 300px;
@@ -627,6 +624,11 @@ h1,h2,h3{ text-wrap:balance; }
     stroke-dasharray:3 3; opacity:.8; }
 .chart-svg .refill-drop{ fill:var(--accent-green); }
 #usage-chart{ display:block; }
+        .chart-sum{ font-size:.85rem; color:var(--text-secondary); margin:-4px 0 var(--spacing-2);
+                    font-variant-numeric:tabular-nums; }
+        .chart-sum b{ color:var(--text-primary); }
+        .bar.laeuft{ opacity:.45; }
+        .bar.stummel{ opacity:.55; }
 .chart-svg{ width:100%; height:auto; display:block; font-family:var(--font-family); }
 .chart-svg .grid-line{ stroke:var(--outline); stroke-width:1; opacity:.4; }
 .chart-svg .axis-label{ fill:var(--text-secondary); font-size:9px; }
@@ -662,7 +664,7 @@ h1,h2,h3{ text-wrap:balance; }
         <div class="card" id="card-power">
             <h2><span class="sh-i" data-sh-icon="mist" aria-hidden="true"></span>Nebelmaschine Steuerung</h2>
             <div class="fog-button" id="fog-btn">
-                <span style="font-size: 60px;"><span data-sh-icon="fog"></span> </span>
+                <span style="font-size: 44px;"><span data-sh-icon="fog"></span> </span>
             </div>
             <div class="fog-status inactive" id="fog-status">
                 Nebelmaschine ist AUS
@@ -688,15 +690,6 @@ h1,h2,h3{ text-wrap:balance; }
             </div>
         </div>
 
-        <!-- Additional Controls -->
-        <div class="card" id="card-advanced">
-            <h2>Erweiterte Steuerung</h2>
-            <div class="control-grid">
-                <button class="btn btn-danger" id="force-off">
-                    <span><span class="sh-i" data-sh-icon="power" aria-hidden="true"></span>NOTAUS</span>
-                </button>
-            </div>
-        </div>
         </div>
 
         <div class="col">
@@ -752,7 +745,8 @@ h1,h2,h3{ text-wrap:balance; }
                     <button data-r="30d">30d</button>
                 </span>
             </h2>
-            <div id="usage-chart" style="min-height: 240px; background: var(--background-darker); border-radius: var(--radius); padding: var(--spacing-4); color: var(--text-secondary);">
+            <div class="chart-sum" id="usage-summary" aria-live="polite"></div>
+            <div id="usage-chart" style="min-height: 200px; background: var(--background-darker); border-radius: var(--radius); padding: var(--spacing-3); color: var(--text-secondary);">
                 Chart wird geladen...
             </div>
         </div>
@@ -1038,7 +1032,6 @@ h1,h2,h3{ text-wrap:balance; }
                     fogStatus: document.getElementById('fog-status'),
                     fogBackground: document.getElementById('fog-background'),
                     // forceOnBtn: document.getElementById('force-on'),
-                    forceOffBtn: document.getElementById('force-off'),
                     activationCount: document.getElementById('activation-count'),
                     lastActivated: document.getElementById('last-activated'),
                     peakHour: document.getElementById('peak-hour'),
@@ -1089,10 +1082,6 @@ h1,h2,h3{ text-wrap:balance; }
             attachEventListeners() {
                 // Main fog button (toggle)
                 this.elements.fogBtn.addEventListener('click', () => this.toggleFog());
-
-                // Force controls
-                // this.elements.forceOnBtn.addEventListener('click', () => this.turnOn());
-                this.elements.forceOffBtn.addEventListener('click', () => this.turnOff());
 
 
                 // Tank: open dialogs
@@ -1221,49 +1210,7 @@ h1,h2,h3{ text-wrap:balance; }
                 }
             }
 
-            async turnOn() {
-                try {
-                    const response = await fetch('api/fog/on', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    const result = await response.json();
-                    
-                    if (result.success) {
-                        this.showMessage('Nebelmaschine eingeschaltet', 'success');
-                        this.updateUI(true);
-                        setTimeout(() => this.loadStatus(), 500);
-                    } else {
-                        this.showMessage('Einschalten fehlgeschlagen', 'error');
-                    }
-                } catch (error) {
-                    this.showMessage('Verbindungsfehler', 'error');
-                }
-            }
-
-            async turnOff() {
-                try {
-                    const response = await fetch('api/fog/off', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' }
-                    });
-                    const result = await response.json();
-                    
-                    if (result.success) {
-                        this.showMessage('Nebelmaschine ausgeschaltet', 'success');
-                        this.updateUI(false);
-                        setTimeout(() => this.loadStatus(), 500);
-                    } else {
-                        this.showMessage('Ausschalten fehlgeschlagen', 'error');
-                    }
-                } catch (error) {
-                    this.showMessage('Verbindungsfehler', 'error');
-                }
-            }
-
-
-
-            async loadTank() {
+async loadTank() {
                 try {
                     const response = await fetch('api/tank');
                     const data = await response.json();
@@ -1543,24 +1490,67 @@ h1,h2,h3{ text-wrap:balance; }
             }
 
             renderChart(data) {
+                /* Chart-Rework 2026-08-23. Vier dokumentierte Schwaechen des
+                   Vorgaengers:
+                   1. Er zaehlte AKTIVIERUNGEN, obwohl die App ueberall in
+                      Nebel-SEKUNDEN rechnet (Tank, ml/s, Kalibrierung) — ein
+                      1-s-Stoss zaehlte wie ein 20-s-Stoss; die echte Nutzung
+                      steckte nur im Desktop-Tooltip.
+                   2. Ampelfarben nach RELATIVER Balkenhoehe: dieselbe Nutzung
+                      war je nach Fenstermaximum blau oder rot — Rot suggerierte
+                      eine Warnung, kodierte aber nur "hoechster Balken".
+                   3. Der letzte Bucket ist ANGEBROCHEN (die laufende Stunde)
+                      und wirkte als Einbruch am rechten Rand.
+                   4. Ohne Summenzeile musste man Balken zusammenzaehlen — und
+                      auf Touch gibt es keine <title>-Tooltips, dort war die
+                      Nebelzeit komplett unsichtbar.
+                   Jetzt: Balken = Nebelzeit (fmtActive-Achse), EINE Farbe,
+                   laufender Bucket halbtransparent, Summenzeile mit S/Stoessen/O.
+                   Fenster ganz ohne Dauer-Daten (Altbestand vor 2026-08-14)
+                   fallen ehrlich auf die Aktivierungs-Zaehlung zurueck statt
+                   leer zu wirken; einzelne dauerlose Buckets im Sekunden-Modus
+                   werden als kleiner neutraler Stummel gezeigt — "hier war
+                   etwas, Menge nicht erfasst" statt 0 oder erfunden. */
                 const buckets = data.buckets, bucketS = data.bucket_s;
-                const total = buckets.reduce((a, d) => a + d.count, 0);
+                const totalActs = buckets.reduce((a, d) => a + d.count, 0);
+                const totalFog = buckets.reduce((a, d) => a + (d.fog_s || 0), 0);
+                const sumEl = document.getElementById('usage-summary');
                 const RANGE_LABEL = { '1h': 'letzte Stunde', '6h': 'letzte 6 h',
                     '24h': 'letzte 24 h', '7d': 'letzte 7 Tage', '30d': 'letzte 30 Tage' };
-                if (total === 0 && !(data.refills || []).length) {
+                if (totalActs === 0 && !(data.refills || []).length) {
+                    if (sumEl) sumEl.textContent = '';
                     this.elements.usageChart.innerHTML =
-                        '<div style="text-align:center;padding:96px 0;color:var(--text-secondary);">Keine Aktivierungen (' + (RANGE_LABEL[data.range] || data.range) + ')</div>';
+                        '<div style="text-align:center;padding:80px 0;color:var(--text-secondary);">Keine Aktivierungen (' + (RANGE_LABEL[data.range] || data.range) + ')</div>';
                     return;
                 }
 
-                const W = 480, H = 220, padL = 28, padR = 8, padT = 14, padB = 22;
+                const proSekunde = totalFog > 0;
+                const wert = d => proSekunde ? (d.fog_s || 0) : d.count;
+
+                if (sumEl) {
+                    if (proSekunde) {
+                        const actsMitDauer = buckets.filter(d => d.fog_s > 0)
+                            .reduce((a, d) => a + d.count, 0);
+                        const avg = actsMitDauer > 0 ? Math.round(totalFog / actsMitDauer) : 0;
+                        sumEl.innerHTML = 'Σ <b>' + this.fmtActive(totalFog) + '</b> Nebel · <b>'
+                            + totalActs + '</b> ' + (totalActs === 1 ? 'Stoß' : 'Stöße')
+                            + (avg > 0 ? ' · Ø <b>' + this.fmtActive(avg) + '</b> je Stoß' : '');
+                    } else {
+                        sumEl.innerHTML = '<b>' + totalActs + '</b> Aktivierungen · Dauer nicht erfasst';
+                    }
+                }
+
+                /* fmtActive-Beschriftungen ("12:34 min") brauchen mehr Platz
+                   links als zweistellige Zaehler. */
+                const W = 480, H = 210, padL = proSekunde ? 52 : 28, padR = 8, padT = 14, padB = 22;
                 const plotW = W - padL - padR, plotH = H - padT - padB;
                 const x0 = padL, yBase = padT + plotH;
                 const n = buckets.length;
                 const t0 = buckets[0].t, t1 = buckets[n - 1].t + bucketS;
                 const bandW = plotW / n, barW = Math.max(1.5, bandW * 0.66);
-                const rawMax = Math.max(1, ...buckets.map(d => d.count));
+                const rawMax = Math.max(1, ...buckets.map(wert));
                 const niceMax = this._niceCeil(rawMax);
+                const fmtY = t => proSekunde ? this.fmtActive(t) : String(t);
 
                 const ticks = [0, niceMax];
                 if (niceMax % 2 === 0 && niceMax >= 2) ticks.splice(1, 0, niceMax / 2);
@@ -1568,7 +1558,7 @@ h1,h2,h3{ text-wrap:balance; }
                 ticks.forEach(t => {
                     const y = yBase - (t / niceMax) * plotH;
                     grid += `<line class="grid-line" x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}"></line>`;
-                    ylabels += `<text class="axis-label" x="${padL - 5}" y="${(y + 3).toFixed(1)}" text-anchor="end">${t}</text>`;
+                    ylabels += `<text class="axis-label" x="${padL - 5}" y="${(y + 3).toFixed(1)}" text-anchor="end">${fmtY(t)}</text>`;
                 });
 
                 const fmtT = (epoch) => {
@@ -1578,17 +1568,25 @@ h1,h2,h3{ text-wrap:balance; }
                     return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
                 };
 
+                const jetzt = Math.floor(Date.now() / 1000);
                 let bars = '';
                 buckets.forEach((d, i) => {
                     if (!d.count) return;
-                    const h = (d.count / niceMax) * plotH;
                     const x = x0 + i * bandW + (bandW - barW) / 2;
+                    const laeuft = d.t + bucketS > jetzt;
+                    const stummel = proSekunde && !(d.fog_s > 0);
+                    const v = wert(d);
+                    const h = stummel ? 3 : (v / niceMax) * plotH;
                     const y = yBase - h;
-                    const frac = d.count / niceMax;
-                    const color = frac > 0.7 ? 'var(--accent-red)'
-                                : frac > 0.4 ? 'var(--accent-orange)' : 'var(--accent-blue)';
-                    const fog = d.fog_s > 0 ? ` · ${this.fmtActive(d.fog_s)} Nebel` : '';
-                    bars += `<rect class="bar" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="2" fill="${color}"><title>${fmtT(d.t)} — ${d.count} Aktivierung${d.count === 1 ? '' : 'en'}${fog}</title></rect>`;
+                    const acts = d.count + ' ' + (d.count === 1 ? 'Stoß' : 'Stöße');
+                    const tip = fmtT(d.t) + ' — '
+                        + (stummel ? acts + ' (Dauer nicht erfasst)'
+                           : proSekunde ? this.fmtActive(d.fog_s) + ' Nebel · ' + acts
+                           : acts)
+                        + (laeuft ? ' · läuft noch' : '');
+                    const cls = 'bar' + (laeuft ? ' laeuft' : '') + (stummel ? ' stummel' : '');
+                    const fill = stummel ? 'var(--text-secondary)' : 'var(--accent-blue)';
+                    bars += `<rect class="${cls}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="2" fill="${fill}"><title>${tip}</title></rect>`;
                 });
 
                 // Nachfuell-Marker: gestrichelte Linie + Tropfen, Tooltip mit ml
@@ -1613,7 +1611,7 @@ h1,h2,h3{ text-wrap:balance; }
                 }
 
                 this.elements.usageChart.innerHTML =
-                    `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Aktivierungen (${RANGE_LABEL[data.range] || data.range})">`
+                    `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${proSekunde ? 'Nebelzeit' : 'Aktivierungen'} (${RANGE_LABEL[data.range] || data.range})">`
                     + grid + ylabels + bars + refills + xlabels
                     + `<line class="grid-line" x1="${padL}" y1="${yBase}" x2="${W - padR}" y2="${yBase}" style="opacity:.7"></line></svg>`;
             }
