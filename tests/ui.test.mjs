@@ -186,10 +186,36 @@ test('Erweiterte Steuerung und NOTAUS sind restlos entfernt', () => {
   }
 });
 
-test('btn-danger BLEIBT — der Kalibrier-Abbrechen-Knopf traegt sie', () => {
-  // Die NOTAUS-Entfernung darf die geteilte Gefahren-Klasse nicht mitreissen.
-  assert.ok(SRC.includes('id="calib-abort"'));
-  assert.match(SRC, /\.btn-danger\s*\{/);
+test('der Kalibrier-Abbrechen-Knopf bleibt ein GEFAHREN-Knopf (jetzt sh-btn danger)', () => {
+  // Die NOTAUS-Entfernung durfte die Gefahren-Auszeichnung nicht mitreissen
+  // (Pin vom 2026-08-23); seit der Phase-3-Adoption kommt sie aus dem
+  // Suite-Dialekt statt aus eigenem Skin.
+  const m = SRC.match(/<button[^>]*id="calib-abort"[^>]*>/);
+  assert.ok(m, 'calib-abort fehlt');
+  assert.match(m[0], /sh-btn danger/);
+});
+
+test('Phase-3-Adoption: alle Buttons sprechen sh-btn, Skins sind tot', () => {
+  const btns = [...SRC.matchAll(/<button class="btn[^"]*"[^>]*>/g)];
+  assert.equal(btns.length, 11);
+  for (const b of btns) assert.match(b[0], /sh-btn/, b[0]);
+  const CSSP = SRC.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/\.btn-primary\s*\{/.test(CSSP), 'btn-primary-Skin lebt noch');
+  assert.ok(!/\.btn-danger\s*\{/.test(CSSP), 'btn-danger-Skin lebt noch');
+  assert.ok(!/\.btn-tonal\s*\{/.test(CSSP), 'btn-tonal-Skin lebt noch');
+  // Skelett bleibt (Grid-fuellende Breite + flex fuer Icon+Label):
+  assert.match(CSSP, /\.btn\s*\{[^}]*width:\s*100%/);
+});
+
+test('Zeitraum-Chips sind sh-pills (aktiv = Primary-Fuellung aus dem Dialekt)', () => {
+  const chips = [...SRC.matchAll(/<button data-r="[^"]+"[^>]*>/g)];
+  assert.equal(chips.length, 5);
+  for (const c of chips) assert.match(c[0], /sh-pill/, c[0]);
+  const CSSP = SRC.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(!/\.chart-ranges button\.active/.test(CSSP), 'eigener Aktiv-Skin lebt noch');
+  // inline-flex am Container MUSS bleiben — sh-tabs' display:flex machte die
+  // Chip-Reihe sonst zum Block und risse den Kartenkopf um:
+  assert.match(CSSP, /\.chart-ranges\{[^}]*inline-flex/);
 });
 
 test('⚠️ der Chart zeigt Nebelzeit, nicht Aktivierungs-Zaehlung', () => {
