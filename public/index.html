@@ -588,6 +588,12 @@ h1,h2,h3{ text-wrap:balance; }
 .chart-svg .grid-line{ stroke:var(--outline); stroke-width:1; opacity:.4; }
 .chart-svg .axis-label{ fill:var(--text-secondary); font-size:9px; }
 .chart-svg .bar{ transition:height .35s var(--ease-emph), y .35s var(--ease-emph); cursor:default; }
+/* Einzeichnen nur bei Initial/Range-Wechsel: Balken wachsen gestaffelt aus der
+   Basislinie (transform-box:fill-box — sonst rechnet scaleY vom SVG-Ursprung). */
+.chart-svg.intro .bar{ animation: bar-grow .5s var(--ease-emph) backwards; transform-origin: bottom; transform-box: fill-box; }
+.chart-svg.intro .axis-label, .chart-svg.intro .refill-line, .chart-svg.intro .refill-drop{ animation: chart-fade .45s .25s var(--ease-emph) both; }
+@keyframes bar-grow{ from{ transform: scaleY(0); } }
+@keyframes chart-fade{ from{ opacity:0; } }
 .chart-svg .bar:hover{ filter:brightness(1.15); }
 
         .sh-i{display:inline-flex;align-items:center;justify-content:center;line-height:0}
@@ -1114,7 +1120,7 @@ h1,h2,h3{ text-wrap:balance; }
                     this.elements.peakHour.textContent = data.peakHour || '-';
                     
                     // Load usage chart
-                    this.loadUsageChart();
+                    this.loadUsageChart(false);
                     
                 } catch (error) {
                     console.error('Failed to load status:', error);
@@ -1416,14 +1422,14 @@ async loadTank() {
                 this.showMessage('Kalibrierung abgebrochen — nichts gespeichert', 'success');
             }
 
-            async loadUsageChart() {
+            async loadUsageChart(intro) {
                 try {
                     const r = this._usageRange || localStorage.getItem('fog-usage-range') || '24h';
                     this._usageRange = r;
                     const response = await fetch('api/analytics/usage?range=' + r);
                     const data = await response.json();
                     if (data.success && data.buckets) {
-                        this.renderChart(data);
+                        this.renderChart(data, intro || !this._chartMeta);
                         if (this.elements.peakHour && data.peakHour)
                             this.elements.peakHour.textContent = data.peakHour;
                     }
@@ -1435,7 +1441,7 @@ async loadTank() {
                 try { localStorage.setItem('fog-usage-range', r); } catch (e) {}
                 document.querySelectorAll('#usage-ranges button').forEach(b =>
                     b.classList.toggle('active', b.dataset.r === r));
-                this.loadUsageChart();
+                this.loadUsageChart(true);
             }
 
             _niceCeil(v) {
@@ -1445,7 +1451,7 @@ async loadTank() {
                 return nice * pow;
             }
 
-            renderChart(data) {
+            renderChart(data, intro) {
                 /* Chart-Rework 2026-08-23. Vier dokumentierte Schwaechen des
                    Vorgaengers:
                    1. Er zaehlte AKTIVIERUNGEN, obwohl die App ueberall in
@@ -1525,24 +1531,29 @@ async loadTank() {
                 };
 
                 const jetzt = Math.floor(Date.now() / 1000);
-                let bars = '';
-                buckets.forEach((d, i) => {
-                    if (!d.count) return;
+                // KONSTANTE Topologie: auch 0-Buckets bekommen ein (0 hohes)
+                // rect — nur so kann ein hereinkommender Wert per Transition
+                // WACHSEN statt als neues Element aufzupoppen, und das
+                // In-Place-Update unten kann stur ueber Indizes gehen.
+                const balken = buckets.map((d, i) => {
                     const x = x0 + i * bandW + (bandW - barW) / 2;
                     const laeuft = d.t + bucketS > jetzt;
-                    const stummel = proSekunde && !(d.fog_s > 0);
+                    const stummel = proSekunde && d.count > 0 && !(d.fog_s > 0);
                     const v = wert(d);
-                    const h = stummel ? 3 : (v / niceMax) * plotH;
-                    const y = yBase - h;
+                    const h = !d.count ? 0 : stummel ? 3 : (v / niceMax) * plotH;
                     const acts = d.count + ' ' + (d.count === 1 ? 'Stoß' : 'Stöße');
-                    const tip = fmtT(d.t) + ' — '
+                    const tip = !d.count ? '' : fmtT(d.t) + ' — '
                         + (stummel ? acts + ' (Dauer nicht erfasst)'
                            : proSekunde ? this.fmtActive(d.fog_s) + ' Nebel · ' + acts
                            : acts)
                         + (laeuft ? ' · läuft noch' : '');
-                    const cls = 'bar' + (laeuft ? ' laeuft' : '') + (stummel ? ' stummel' : '');
-                    const fill = stummel ? 'var(--text-secondary)' : 'var(--accent-blue)';
-                    bars += `<rect class="${cls}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="2" fill="${fill}"><title>${tip}</title></rect>`;
+                    return { x, y: yBase - h, h: Math.max(0, h), tip,
+                             cls: 'bar' + (laeuft && d.count ? ' laeuft' : '') + (stummel ? ' stummel' : ''),
+                             fill: stummel ? 'var(--text-secondary)' : 'var(--accent-blue)' };
+                });
+                let bars = '';
+                balken.forEach((b, i) => {
+                    bars += `<rect class="${b.cls}" x="${b.x.toFixed(1)}" y="${b.y.toFixed(1)}" width="${barW.toFixed(1)}" height="${b.h.toFixed(1)}" rx="2" fill="${b.fill}" style="animation-delay:${i * 12}ms"><title>${b.tip}</title></rect>`;
                 });
 
                 // Nachfuell-Marker: gestrichelte Linie + Tropfen, Tooltip mit ml
@@ -1566,10 +1577,40 @@ async loadTank() {
                     xlabels += `<text class="axis-label" x="${x.toFixed(1)}" y="${(yBase + 14).toFixed(1)}" text-anchor="middle">${fmtT(buckets[i].t)}</text>`;
                 }
 
+                // In-Place-Update, wenn nur WERTE sich bewegen (der 5-s-Poll
+                // ruft hierher!): gleiche Struktur -> vorhandene rects morphen
+                // per CSS-Transition (der laufende Balken WAECHST), kein
+                // innerHTML-Churn, kein Neuzeichnen.
+                const meta = [data.range, buckets.length, buckets[0] && buckets[0].t,
+                              niceMax, proSekunde, refills].join('|');
+                const alt = this.elements.usageChart.querySelector('svg.chart-svg');
+                if (!intro && alt && meta === this._chartMeta) {
+                    const rects = alt.querySelectorAll('rect.bar');
+                    if (rects.length === balken.length) {
+                        balken.forEach((b, i) => {
+                            const r = rects[i];
+                            if (r.getAttribute('y') !== b.y.toFixed(1)) r.setAttribute('y', b.y.toFixed(1));
+                            if (r.getAttribute('height') !== b.h.toFixed(1)) r.setAttribute('height', b.h.toFixed(1));
+                            if (r.getAttribute('class') !== b.cls) r.setAttribute('class', b.cls);
+                            if (r.getAttribute('fill') !== b.fill) r.setAttribute('fill', b.fill);
+                            const t = r.querySelector('title');
+                            if (t && t.textContent !== b.tip) t.textContent = b.tip;
+                        });
+                        return;
+                    }
+                }
+                this._chartMeta = meta;
                 this.elements.usageChart.innerHTML =
-                    `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${proSekunde ? 'Nebelzeit' : 'Aktivierungen'} (${RANGE_LABEL[data.range] || data.range})">`
+                    `<svg class="chart-svg${intro ? ' intro' : ''}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${proSekunde ? 'Nebelzeit' : 'Aktivierungen'} (${RANGE_LABEL[data.range] || data.range})">`
                     + grid + ylabels + bars + refills + xlabels
                     + `<line class="grid-line" x1="${padL}" y1="${yBase}" x2="${W - padR}" y2="${yBase}" style="opacity:.7"></line></svg>`;
+                if (intro) {
+                    clearTimeout(this._chartIntroTimer);
+                    this._chartIntroTimer = setTimeout(() => {
+                        const svg = this.elements.usageChart.querySelector('svg.intro');
+                        if (svg) svg.classList.remove('intro');
+                    }, 900);
+                }
             }
 
             showMessage(text, type = 'info') {

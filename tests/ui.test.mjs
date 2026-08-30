@@ -109,7 +109,7 @@ test('der Chart fragt den gewaehlten Zeitraum am Server an', () => {
 });
 
 test('ein fehlgeschlagener Chart-Poll reisst die App nicht', () => {
-  const i = SRC.indexOf('async loadUsageChart()');
+  const i = SRC.indexOf('async loadUsageChart(intro)');
   assert.notEqual(i, -1);
   const fn = SRC.slice(i, i + 900);
   assert.match(fn, /catch/, 'ein Netz-Hiccup darf den Chart nicht die App reissen lassen');
@@ -268,4 +268,25 @@ test('die Y-Achse traegt im Sekunden-Modus die fmtActive-Einheit', () => {
   assert.match(fn, /proSekunde \? this\.fmtActive\(t\) : String\(t\)/);
   // fmtActive-Labels ("12:34 min") brauchen mehr Platz als Zaehler
   assert.match(fn, /padL = proSekunde \? 52 : 28/);
+});
+
+/* ---- Chart-Motion (2026-08-30) -------------------------------------------- */
+
+test('Chart: konstante Balken-Topologie + In-Place-Update im 5-s-Poll', () => {
+  // Auch 0-Buckets bekommen ein rect — nur so WAECHST ein hereinkommender
+  // Wert per Transition statt als neues Element aufzupoppen; und der 5-s-Poll
+  // (loadStatus -> loadUsageChart) darf kein innerHTML-Churn sein.
+  const JSP = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/[^\n]*$/gm, '');
+  assert.match(JSP, /const balken = buckets\.map/);
+  assert.match(JSP, /meta === this\._chartMeta/);
+  assert.match(JSP, /r\.setAttribute\('height'/);
+});
+
+test('Chart: Einzeichnen nur bei Initial/Range-Wechsel, gestaffelt', () => {
+  assert.match(SRC, /@keyframes bar-grow/);
+  assert.match(SRC, /transform-box: fill-box/, 'scaleY rechnet sonst vom SVG-Ursprung');
+  assert.match(SRC, /animation-delay:\$\{i \* 12\}ms/);
+  assert.match(SRC, /this\.loadUsageChart\(true\);/);   // Range-Wechsel
+  const JSP = SRC.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(JSP, /intro \|\| !this\._chartMeta/);     // Erstaufbau
 });
