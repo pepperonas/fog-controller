@@ -1,18 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Fog">
   <defs>
     <linearGradient id="fg-fog" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#c3cfe0"/>
-      <stop offset="1" stop-color="#4f5f77"/>
+      <stop offset="0" stop-color="#9baacf"/>
+      <stop offset="1" stop-color="#525c75"/>
     </linearGradient>
     <linearGradient id="fs-fog" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff" stop-opacity=".30"/>
+      <stop offset="0" stop-color="#fff" stop-opacity=".26"/>
       <stop offset=".55" stop-color="#fff" stop-opacity="0"/>
     </linearGradient>
+    <radialGradient id="fk-fog" cx=".42" cy=".38" r=".72">
+      <stop offset="0" stop-color="#ffe0ad"/>
+      <stop offset="1" stop-color="#ff9b22"/>
+    </radialGradient>
   </defs>
   <rect width="64" height="64" rx="15" fill="url(#fg-fog)"/>
   <rect width="64" height="64" rx="15" fill="url(#fs-fog)"/>
-  <g transform="translate(8 8) scale(2)" fill="#fff">
-    <path d="M6.2 15.2c-2.1 0-3.7-1.55-3.7-3.45S4.1 8.3 6.2 8.3c.35-2.1 2.15-3.7 4.35-3.7 1.55 0 2.95.8 3.75 2.05.55-.35 1.2-.55 1.9-.55 2 0 3.6 1.55 3.6 3.45 0 .2 0 .4-.05.6 1.55.45 2.65 1.85 2.65 3.5 0 2-1.7 3.65-3.8 3.65H6.2c-2.05 0-3.7-1.55-3.7-3.45 0-.2 0-.4.05-.6.5.2 1.05.3 1.65.3z" opacity=".92"/>
-    <path d="M4.5 19.2c1.2-.9 2.7-1.4 4.3-1.4h7.6c1.35 0 2.6.35 3.7.95" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>
+  <g transform="translate(32 32) scale(1) translate(-32 -32)">
+    <circle cx="32" cy="32" r="22" fill="#202228"/>
+    <path d="M32.00 21.00L41.53 26.50L41.53 37.50L32.00 43.00L22.47 37.50L22.47 26.50Z" fill="url(#fk-fog)"/>
+    <g stroke="#fff" stroke-opacity=".17" stroke-width="1.6" stroke-linecap="round">
+      <path d="M41.53 26.50L49.48 31.09"/>
+      <path d="M41.53 37.50L41.53 46.68"/>
+      <path d="M32.00 43.00L24.05 47.59"/>
+      <path d="M22.47 37.50L14.52 32.91"/>
+      <path d="M22.47 26.50L22.47 17.32"/>
+      <path d="M32.00 21.00L39.95 16.41"/>
+    </g>
   </g>
 </svg>
